@@ -9,8 +9,10 @@
     min-width: 16px;
 }
 
+/* Padding uniforme: o St.Icon e quadrado (icon_size x icon_size), entao
+ * a area de hover sai quadrada em qualquer valor de icon-size. */
 .liontray-item {
-    padding: 0 4px;
+    padding: 4px;
     border-radius: 6px;
     transition-duration: 100ms;
 }
@@ -27,10 +29,6 @@
 
 .liontray-attention .liontray-icon {
     color: #f57900;
-}
-
-.liontray-overflow-button {
-    padding: 0 2px;
 }
 
 /* Marcador de insercao mostrado durante o arraste */
