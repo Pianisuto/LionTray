@@ -1,0 +1,92 @@
+name: Bug report / Relatar bug
+description: Algo não está funcionando como esperado.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por relatar o problema. Quanto mais reproduzível, mais fácil corrigir.
+
+  - type: input
+    id: version
+    attributes:
+      label: Versão do LionTray
+      placeholder: v1.0.0, main ou commit SHA
+    validations:
+      required: true
+
+  - type: input
+    id: distro
+    attributes:
+      label: Distribuição
+      placeholder: Zorin OS 18, Ubuntu 26.04, Fedora 43...
+    validations:
+      required: true
+
+  - type: input
+    id: gnome
+    attributes:
+      label: GNOME Shell
+      placeholder: 46.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: session
+    attributes:
+      label: Sessão
+      options:
+        - Xorg
+        - Wayland
+        - Não sei
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: O que aconteceu?
+      description: Descreva o comportamento observado e o que você esperava.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Passos para reproduzir
+      placeholder: |
+        1. Ative o LionTray
+        2. Abra ...
+        3. Arraste ...
+        4. O problema acontece
+    validations:
+      required: true
+
+  - type: textarea
+    id: indicators
+    attributes:
+      label: Aplicativos/indicadores envolvidos
+      placeholder: Bitwarden Flatpak, Dropbox, Flameshot...
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs relevantes
+      description: Remova dados sensíveis antes de enviar.
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Contexto adicional
+      description: Screenshots, vídeos curtos ou qualquer detalhe que ajude a reproduzir.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: Verifiquei que não estou incluindo senhas, tokens ou outros dados sensíveis.
+          required: true
+        - label: Procurei Issues existentes e não encontrei o mesmo problema.
+          required: true

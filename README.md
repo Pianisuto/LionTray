@@ -1,5 +1,10 @@
 # LionTray
 
+[![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
+![GNOME Shell](https://img.shields.io/badge/GNOME%20Shell-46-4A86CF)
+[![Check](https://github.com/Pianisuto/LionTray/actions/workflows/check.yml/badge.svg)](https://github.com/Pianisuto/LionTray/actions/workflows/check.yml)
+[![GitHub release](https://img.shields.io/github/v/release/Pianisuto/LionTray?display_name=tag&sort=semver)](https://github.com/Pianisuto/LionTray/releases)
+
 Extensão do GNOME Shell para substituir a bandeja de sistema
 (`StatusNotifierItem` / AppIndicator) por uma interface simples, organizada e
 mais próxima do comportamento do Windows: os indicadores ficam no painel,
@@ -12,13 +17,12 @@ de overflow.
 [Bitwarden] [Flameshot] [▲]        Dropbox agora vive no overflow
 ```
 
-- UUID: `liontray@pianisuto.github.io`
-- Repositório: `Pianisuto/LionTray`
-- Testado em: Zorin OS, GNOME Shell 46, Xorg, GJS 1.80
-- Licença: GPL-3.0-or-later
+- **UUID:** `liontray@pianisuto.github.io`
+- **Testado em:** Zorin OS, GNOME Shell 46, Xorg, GJS 1.80
+- **Licença:** GPL-3.0-or-later
 
-O `metadata.json` declara apenas GNOME Shell 46 de propósito. Outras versões
-só devem ser adicionadas a `shell-version` depois de teste real.
+> O `metadata.json` declara apenas GNOME Shell 46 de propósito. Outras versões
+> só devem ser adicionadas após teste real.
 
 ## Recursos
 
@@ -42,7 +46,14 @@ só devem ser adicionadas a `shell-version` depois de teste real.
 - Opção para **dessaturar os ícones**, exibindo os aplicativos em tons de
   cinza sem alterar os arquivos originais.
 
-## Instalação local
+## Instalação
+
+### GNOME Extensions
+
+O LionTray foi preparado para distribuição pelo extensions.gnome.org. Enquanto
+a versão estiver em revisão, use a instalação manual abaixo.
+
+### Instalação manual pelo repositório
 
 ```bash
 git clone https://github.com/Pianisuto/LionTray.git
@@ -62,28 +73,25 @@ Isso instala a extensão em:
 ~/.local/share/gnome-shell/extensions/liontray@pianisuto.github.io/
 ```
 
-### Se você usou um UUID antigo
-
-Versões de desenvolvimento anteriores usaram `liontray@lionflow.dev` e,
-brevemente, `liontray@pianisuto.dev`. Como o UUID identifica a extensão para
-o GNOME, remova instalações antigas uma vez:
+Depois reinicie o GNOME Shell e habilite:
 
 ```bash
-gnome-extensions disable liontray@lionflow.dev 2>/dev/null || true
-gnome-extensions disable liontray@pianisuto.dev 2>/dev/null || true
-rm -rf ~/.local/share/gnome-shell/extensions/liontray@lionflow.dev
-rm -rf ~/.local/share/gnome-shell/extensions/liontray@pianisuto.dev
-```
-
-Depois instale e habilite o UUID definitivo:
-
-```bash
-make install
 gnome-extensions enable liontray@pianisuto.github.io
 ```
 
-O schema GSettings continua com o mesmo caminho, então as preferências e a
-organização salvas continuam compatíveis.
+No Xorg, use `Alt+F2`, digite `r` e pressione Enter. No Wayland, faça
+logout/login.
+
+### Instalação por GitHub Release
+
+Depois da primeira release, baixe `liontray@pianisuto.github.io.zip` na página
+de Releases e execute:
+
+```bash
+gnome-extensions install --force liontray@pianisuto.github.io.zip
+```
+
+Reinicie o Shell e habilite a extensão.
 
 ### Conflito com outro AppIndicator
 
@@ -96,18 +104,6 @@ gnome-extensions disable zorin-appindicator@zorinos.com
 
 Se outro processo continuar com o nome, o LionTray detecta o conflito,
 registra o responsável no log e mostra um aviso no painel.
-
-### Reiniciar o Shell
-
-No Xorg, use `Alt+F2`, digite `r` e pressione Enter.
-
-Também é possível:
-
-```bash
-busctl --user call org.gnome.Shell /org/gnome/Shell org.gnome.Shell Eval s 'Meta.restart("Reiniciando...")'
-```
-
-No Wayland, faça logout/login.
 
 ## Uso
 
@@ -137,7 +133,7 @@ Com dois ou mais itens ocultos, o botão pode mostrar a contagem (`▲ 3`).
 gnome-extensions prefs liontray@pianisuto.github.io
 ```
 
-A tela de preferências mantém apenas opções que não fazem sentido como gesto:
+A tela mantém apenas opções que não fazem sentido como gesto:
 
 - **Aparência:** tamanho dos ícones, dessaturação, área do painel e posição;
 - **Comportamento:** visibilidade do overflow, contagem e tratamento de
@@ -147,30 +143,14 @@ A tela de preferências mantém apenas opções que não fazem sentido como gest
   link do repositório.
 
 A opção **Dessaturar os ícones** usa `Clutter.DesaturateEffect` diretamente no
-ator do ícone. Isso funciona igualmente para PNG, SVG, `IconPixmap` e ícones
-de tema e não modifica os arquivos entregues pelos aplicativos.
+ator do ícone. Isso funciona para PNG, SVG, `IconPixmap` e ícones de tema e não
+modifica os arquivos entregues pelos aplicativos.
 
 Também pode ser alterada pela linha de comando:
 
 ```bash
 gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.github.io/schemas \
   set org.gnome.shell.extensions.liontray desaturate-icons true
-```
-
-Outros exemplos:
-
-```bash
-# tamanho
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.github.io/schemas \
-  set org.gnome.shell.extensions.liontray icon-size 20
-
-# mostrar indicadores Passive no painel
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.github.io/schemas \
-  set org.gnome.shell.extensions.liontray hide-passive false
-
-# mover a bandeja para o centro
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.github.io/schemas \
-  set org.gnome.shell.extensions.liontray panel-box center
 ```
 
 ## Desenvolvimento
@@ -197,16 +177,7 @@ normalmente basta. Chaves GSettings reagem ao vivo quando suportado.
 journalctl -f -o cat /usr/bin/gnome-shell | grep -i liontray
 ```
 
-### Estado salvo
-
-```bash
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.github.io/schemas \
-  list-recursively org.gnome.shell.extensions.liontray
-```
-
 ## Empacotamento e distribuição
-
-Para gerar o ZIP destinado ao extensions.gnome.org:
 
 ```bash
 make check
@@ -214,21 +185,23 @@ make test
 make pack
 ```
 
-O arquivo gerado é:
+O pacote gerado é:
 
 ```text
 liontray@pianisuto.github.io.zip
 ```
 
-O `Makefile` mantém `metadata.json` na raiz do ZIP e exclui
-`schemas/gschemas.compiled`, deixando no pacote apenas o XML do schema para o
-GNOME compilar no ambiente correto.
+O ZIP mantém `metadata.json` na raiz e não inclui
+`schemas/gschemas.compiled`.
 
-O mesmo ZIP pode ser anexado a uma GitHub Release para instalação manual:
+### Releases automáticas
+
+O workflow de release cria o ZIP e publica uma GitHub Release quando uma tag
+`v*` é enviada. Exemplo para a primeira versão:
 
 ```bash
-gnome-extensions install --force liontray@pianisuto.github.io.zip
-gnome-extensions enable liontray@pianisuto.github.io
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 ## Estrutura
@@ -256,16 +229,28 @@ liontray@pianisuto.github.io/
 `tray.js` e `indicatorButton.js` cuidam da UI; `iconResolver.js` concentra a
 resolução de ícones.
 
-## Testes
+## Contribuindo
 
-```bash
-make test
-```
+Contribuições são bem-vindas. Antes de abrir um PR, leia
+[CONTRIBUTING.md](CONTRIBUTING.md). Bugs e sugestões podem ser enviados pelos
+formulários de Issue do repositório.
 
-Os testes sobem um barramento D-Bus isolado, registram um
-`StatusNotifierItem` falso e cobrem o backend sem interferir na sessão real.
-A parte visual roda dentro do GNOME Shell e ainda exige smoke test manual.
+Para mudanças visuais, screenshots ou vídeos curtos no PR ajudam bastante a
+revisão.
+
+## Segurança
+
+Não publique detalhes sensíveis de vulnerabilidades em Issues. Consulte
+[SECURITY.md](SECURITY.md).
+
+## Changelog
+
+Veja [CHANGELOG.md](CHANGELOG.md) para as mudanças por versão.
+
+## Código de Conduta
+
+Ao participar do projeto, siga [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## Licença
 
-GPL-3.0-or-later.
+GPL-3.0-or-later. Veja [LICENSE](LICENSE).

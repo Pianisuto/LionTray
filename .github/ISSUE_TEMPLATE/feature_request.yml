@@ -1,0 +1,46 @@
+name: Feature request / Sugerir recurso
+description: Sugira uma melhoria de comportamento, UX ou compatibilidade.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Explique primeiro o problema que você quer resolver. Isso ajuda a avaliar alternativas melhores do que uma implementação específica.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema ou necessidade
+      description: O que está faltando hoje? Em que situação isso atrapalha?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Solução proposta
+      description: Como você imagina que o LionTray deveria se comportar?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: Há outro fluxo, gesto, configuração ou solução que também resolveria?
+
+  - type: textarea
+    id: examples
+    attributes:
+      label: Referências ou exemplos
+      description: Outros trays/extensões, screenshots, GIFs ou links que ajudem a explicar a ideia.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: Procurei Issues existentes para evitar duplicatas.
+          required: true
+        - label: A proposta mantém o LionTray focado em bandeja/indicadores do sistema.
+          required: true
