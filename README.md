@@ -15,6 +15,12 @@ reordena arrastando e joga os que não usa em um botão de overflow.
 - Testado em: Zorin OS, GNOME Shell 46, Xorg, GJS 1.80
 - Licença: GPL-3.0-or-later
 
+O `metadata.json` declara `shell-version: ["46"]` de propósito. O código não
+usa nada específico de 46 e provavelmente roda em 45–48, mas nenhuma dessas
+versões foi testada; declarar compatibilidade sem verificar só transfere o
+problema para o usuário. Para experimentar em outra versão, acrescente-a ao
+`shell-version` e reinstale.
+
 ## O que a V1 faz
 
 - Implementa `org.kde.StatusNotifierWatcher` e consome `StatusNotifierItem`.
@@ -59,6 +65,11 @@ qualquer outra extensão que faça o mesmo:
 gnome-extensions disable zorin-appindicator@zorinos.com
 ```
 
+Se algum outro processo estiver com o nome, o LionTray detecta, registra no
+log quem é o dono (com PID e nome do processo) e mostra uma notificação
+*"Outro AppIndicator está ativo"* depois de alguns segundos — em vez de
+simplesmente exibir uma bandeja vazia sem explicação.
+
 ### Ativar o LionTray
 
 ```bash
@@ -84,13 +95,23 @@ No Wayland não há restart do Shell — faça logout e login.
 | Instalar / reinstalar | `make install` |
 | Habilitar | `make enable` |
 | Desabilitar | `make disable` |
-| Reinstalar e reativar | `make reload` |
+| Reinstalar e recarregar CSS | `make reload` |
 | Ver logs ao vivo | `make logs` |
 | Compilar só o schema | `make schemas` |
 | Checar sintaxe dos módulos | `make check` |
 | Rodar os testes do backend | `make test` |
 | Remover a instalação | `make uninstall` |
 | Gerar o zip de distribuição | `make pack` |
+
+Atenção ao ciclo de desenvolvimento: **`make reload` só recarrega o
+`stylesheet.css`**. O Shell chama `_loadExtensionStylesheet()` a cada
+`enable`, mas o módulo JS fica em cache — `_callExtensionInit()` só
+reimporta quando o estado é `INITIALIZED`, e depois de um `disable` ele é
+`INACTIVE`. Ou seja:
+
+- mudou `.css` → `make reload` basta;
+- mudou `.js` → `make install` e reinicie o Shell (`Alt+F2`, `r`, `Enter`);
+- mudou só uma chave GSettings → aplica ao vivo, sem nada.
 
 Equivalentes diretos, sem `make`:
 
@@ -232,9 +253,9 @@ Sobe um barramento D-Bus isolado (`dbus-run-session`), registra um
 sessão: posse do nome `org.kde.StatusNotifierWatcher`, registro e remoção de
 itens, leitura de propriedades, conversão de `IconPixmap` ARGB32 para PNG,
 resolução por `IconName`, `Activate`/`SecondaryActivate`/`Scroll`, o sinal
-`NewIcon` e o parsing do layout DBusMenu (separadores, submenus,
-checkmarks, ícones). A metade de UI (`tray.js`, `indicatorButton.js`) só roda
-dentro do GNOME Shell e é validada à mão.
+`NewIcon`, o parsing do layout DBusMenu (separadores, submenus, checkmarks,
+ícones) e a detecção de conflito de watcher. A metade de UI (`tray.js`,
+`indicatorButton.js`) só roda dentro do GNOME Shell e é validada à mão.
 
 ### Identidade persistida
 

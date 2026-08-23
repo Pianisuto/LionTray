@@ -135,6 +135,30 @@ async function main() {
     check('cache de icones limpo no shutdown',
         !GLib.file_test(cachedPath, GLib.FileTest.EXISTS), cachedPath);
 
+    // 11. conflito de watcher: outro dono que nao aceita substituicao
+    IconResolver.init('liontray-test');
+    const squatterId = Gio.bus_own_name(
+        Gio.BusType.SESSION, 'org.kde.StatusNotifierWatcher',
+        Gio.BusNameOwnerFlags.NONE, null, null, null);
+    await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => (r(), GLib.SOURCE_REMOVE)));
+
+    const blocked = new StatusNotifierWatcher();
+    let conflict = null;
+    blocked.connect('name-conflict', (_w, info) => (conflict = info));
+    blocked.start();
+    await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 800, () => (r(), GLib.SOURCE_REMOVE)));
+
+    check('nome ocupado -> evento "name-conflict"', conflict !== null);
+    check('conflito informa que o nome nunca foi adquirido',
+        conflict?.hadName === false, `hadName=${conflict?.hadName}`);
+    check('conflito identifica o processo dono',
+        typeof conflict?.pid === 'number' && conflict.command.length > 0,
+        `${conflict?.command} pid=${conflict?.pid}`);
+
+    blocked.destroy();
+    Gio.bus_unown_name(squatterId);
+    IconResolver.shutdown();
+
     print(failures === 0 ? '\nTODOS OS TESTES PASSARAM' : `\n${failures} FALHA(S)`);
     loop.quit();
     if (failures > 0) imports.system.exit(1);

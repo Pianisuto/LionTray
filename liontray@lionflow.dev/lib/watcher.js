@@ -59,6 +59,7 @@ export class StatusNotifierWatcher extends EventEmitter {
         this._hosts = new Set();
         this._ownerId = 0;
         this._exported = false;
+        this._ownsName = false;
         this._cancellable = new Gio.Cancellable();
         this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(WATCHER_IFACE_XML, this);
     }
@@ -211,6 +212,9 @@ export class StatusNotifierWatcher extends EventEmitter {
     /* -------------------------------------------------------------- */
 
     _onNameAcquired() {
+        this._ownsName = true;
+        this.emit('name-acquired');
+
         // Avisa aplicativos que um host esta disponivel. A maioria dos
         // toolkits re-registra seus itens ao ver este sinal ou ao ver o
         // nome do watcher trocar de dono.
@@ -222,9 +226,54 @@ export class StatusNotifierWatcher extends EventEmitter {
         this._seedExistingItems().catch(() => {});
     }
 
+    /**
+     * Chamado quando o nome e perdido e tambem quando ele nunca chega a
+     * ser adquirido - o caso de outra implementacao ja estar segurando
+     * org.kde.StatusNotifierWatcher sem permitir substituicao.
+     *
+     * So um processo pode possuir o nome, entao sem ele o LionTray nao
+     * recebe indicador nenhum e a bandeja fica vazia sem explicacao.
+     * Descobrimos quem esta com o nome e repassamos para o bootstrap,
+     * que decide como avisar o usuario.
+     */
     _onNameLost() {
-        warn(`${WATCHER_NAME} foi assumido por outro processo; ` +
-             'desative outras extensoes de AppIndicator (ex.: zorin-appindicator@zorinos.com).');
+        const hadName = this._ownsName;
+        this._ownsName = false;
+
+        this._describeNameOwner().then(info => {
+            if (this._cancellable.is_cancelled())
+                return;
+            this.emit('name-conflict', {hadName, ...info});
+        });
+    }
+
+    /** Identifica o processo que esta com o nome do watcher. */
+    async _describeNameOwner() {
+        try {
+            const ownerReply = await dbusCall(
+                'org.freedesktop.DBus', '/org/freedesktop/DBus',
+                'org.freedesktop.DBus', 'GetNameOwner',
+                new GLib.Variant('(s)', [WATCHER_NAME]), this._cancellable);
+            const [owner] = ownerReply.deep_unpack();
+
+            const pidReply = await dbusCall(
+                'org.freedesktop.DBus', '/org/freedesktop/DBus',
+                'org.freedesktop.DBus', 'GetConnectionUnixProcessID',
+                new GLib.Variant('(s)', [owner]), this._cancellable);
+            const [pid] = pidReply.deep_unpack();
+
+            let command = '';
+            try {
+                const [, bytes] = GLib.file_get_contents(`/proc/${pid}/comm`);
+                command = new TextDecoder().decode(bytes).trim();
+            } catch {
+                // processo pode ter saido nesse meio tempo
+            }
+
+            return {owner, pid, command};
+        } catch {
+            return {};
+        }
     }
 
     /**
