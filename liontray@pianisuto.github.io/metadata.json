@@ -1,5 +1,5 @@
 {
-  "uuid": "liontray@pianisuto.dev",
+  "uuid": "liontray@pianisuto.github.io",
   "name": "LionTray",
   "description": "Bandeja de sistema (StatusNotifierItem/AppIndicator) simples e direta, com reordenação por arrastar e área de overflow, inspirada no comportamento do Windows.",
   "shell-version": [

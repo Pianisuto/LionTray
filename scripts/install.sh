@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 set -euo pipefail
 
-UUID="liontray@pianisuto.dev"
+UUID="liontray@pianisuto.github.io"
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/${UUID}"
 DEST="${HOME}/.local/share/gnome-shell/extensions/${UUID}"
 

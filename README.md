@@ -12,7 +12,7 @@ de overflow.
 [Bitwarden] [Flameshot] [▲]        Dropbox agora vive no overflow
 ```
 
-- UUID: `liontray@pianisuto.dev`
+- UUID: `liontray@pianisuto.github.io`
 - Repositório: `Pianisuto/LionTray`
 - Testado em: Zorin OS, GNOME Shell 46, Xorg, GJS 1.80
 - Licença: GPL-3.0-or-later
@@ -59,24 +59,27 @@ Ou:
 Isso instala a extensão em:
 
 ```text
-~/.local/share/gnome-shell/extensions/liontray@pianisuto.dev/
+~/.local/share/gnome-shell/extensions/liontray@pianisuto.github.io/
 ```
 
-### Se você usou o UUID antigo
+### Se você usou um UUID antigo
 
-Versões de desenvolvimento anteriores usavam `liontray@lionflow.dev`. Como o
-UUID identifica a extensão para o GNOME, remova a instalação antiga uma vez:
+Versões de desenvolvimento anteriores usaram `liontray@lionflow.dev` e,
+brevemente, `liontray@pianisuto.dev`. Como o UUID identifica a extensão para
+o GNOME, remova instalações antigas uma vez:
 
 ```bash
 gnome-extensions disable liontray@lionflow.dev 2>/dev/null || true
+gnome-extensions disable liontray@pianisuto.dev 2>/dev/null || true
 rm -rf ~/.local/share/gnome-shell/extensions/liontray@lionflow.dev
+rm -rf ~/.local/share/gnome-shell/extensions/liontray@pianisuto.dev
 ```
 
-Depois instale e habilite o UUID atual:
+Depois instale e habilite o UUID definitivo:
 
 ```bash
 make install
-gnome-extensions enable liontray@pianisuto.dev
+gnome-extensions enable liontray@pianisuto.github.io
 ```
 
 O schema GSettings continua com o mesmo caminho, então as preferências e a
@@ -131,7 +134,7 @@ Com dois ou mais itens ocultos, o botão pode mostrar a contagem (`▲ 3`).
 ## Preferências
 
 ```bash
-gnome-extensions prefs liontray@pianisuto.dev
+gnome-extensions prefs liontray@pianisuto.github.io
 ```
 
 A tela de preferências mantém apenas opções que não fazem sentido como gesto:
@@ -150,7 +153,7 @@ de tema e não modifica os arquivos entregues pelos aplicativos.
 Também pode ser alterada pela linha de comando:
 
 ```bash
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.dev/schemas \
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.github.io/schemas \
   set org.gnome.shell.extensions.liontray desaturate-icons true
 ```
 
@@ -158,15 +161,15 @@ Outros exemplos:
 
 ```bash
 # tamanho
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.dev/schemas \
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.github.io/schemas \
   set org.gnome.shell.extensions.liontray icon-size 20
 
 # mostrar indicadores Passive no painel
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.dev/schemas \
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.github.io/schemas \
   set org.gnome.shell.extensions.liontray hide-passive false
 
 # mover a bandeja para o centro
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.dev/schemas \
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.github.io/schemas \
   set org.gnome.shell.extensions.liontray panel-box center
 ```
 
@@ -197,7 +200,7 @@ journalctl -f -o cat /usr/bin/gnome-shell | grep -i liontray
 ### Estado salvo
 
 ```bash
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.dev/schemas \
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.github.io/schemas \
   list-recursively org.gnome.shell.extensions.liontray
 ```
 
@@ -214,7 +217,7 @@ make pack
 O arquivo gerado é:
 
 ```text
-liontray@pianisuto.dev.zip
+liontray@pianisuto.github.io.zip
 ```
 
 O `Makefile` mantém `metadata.json` na raiz do ZIP e exclui
@@ -224,14 +227,14 @@ GNOME compilar no ambiente correto.
 O mesmo ZIP pode ser anexado a uma GitHub Release para instalação manual:
 
 ```bash
-gnome-extensions install --force liontray@pianisuto.dev.zip
-gnome-extensions enable liontray@pianisuto.dev
+gnome-extensions install --force liontray@pianisuto.github.io.zip
+gnome-extensions enable liontray@pianisuto.github.io
 ```
 
 ## Estrutura
 
 ```text
-liontray@pianisuto.dev/
+liontray@pianisuto.github.io/
 ├── extension.js
 ├── prefs.js
 ├── stylesheet.css

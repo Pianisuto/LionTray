@@ -1,4 +1,4 @@
-UUID    := liontray@pianisuto.dev
+UUID    := liontray@pianisuto.github.io
 SRC     := $(UUID)
 DEST    := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 
