@@ -93,6 +93,10 @@ class LionTrayIndicatorButton extends St.Button {
     }
 
     _onClicked(button) {
+        // um arraste em andamento nao deve virar clique ao terminar
+        if (this._tray.dragInProgress)
+            return Clutter.EVENT_STOP;
+
         const [x, y] = this._pointerPosition();
 
         if (button === Clutter.BUTTON_SECONDARY) {
@@ -159,6 +163,10 @@ class LionTrayIndicatorButton extends St.Button {
             this.sni.busName, this.sni.menuPath, this._menu);
 
         return this._menu;
+    }
+
+    closeMenu() {
+        this._menu?.close();
     }
 
     _resetMenu() {

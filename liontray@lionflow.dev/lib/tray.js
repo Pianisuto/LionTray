@@ -145,6 +145,27 @@ export class LionTray {
         this._overflowMenu?.close();
     }
 
+    get dragInProgress() {
+        return this._dragActive;
+    }
+
+    /**
+     * Fecha o overflow, os menus dos indicadores e qualquer outro menu do
+     * painel que ainda detenha o grab.
+     *
+     * Enquanto um menu do Main.panel.menuManager esta aberto ele segura o
+     * grab modal, e todo evento ENTER passa pelo manager. Ao sobrevoar o
+     * sourceActor de outro menu gerenciado, ele troca de menu sozinho
+     * (popupMenu.js, _onCapturedEvent). Arrastando um icone por cima dos
+     * outros isso abre o menu de cada um no caminho.
+     */
+    closeAllMenus() {
+        this.closeOverflow();
+        for (const {button} of this._items.values())
+            button.closeMenu();
+        Main.panel.menuManager.activeMenu?.close();
+    }
+
     /** Ator ao qual o menu de um indicador deve se ancorar. */
     anchorFor(button) {
         return button.get_parent() === this._trayBox ? button : this._overflowButton;
@@ -314,7 +335,7 @@ export class LionTray {
         // o botao de overflow precisa existir para receber o drop mesmo
         // quando nenhum indicador esta oculto
         this._overflowButton.visible = true;
-        this.closeOverflow();
+        this.closeAllMenus();
     }
 
     onDragEnd() {
