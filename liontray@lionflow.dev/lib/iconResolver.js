@@ -18,7 +18,12 @@ import St from 'gi://St';
 
 const IMAGE_EXTS = ['', '.png', '.svg', '.symbolic.png', '.xpm'];
 const MAX_THEME_DEPTH = 4;
-const GENERIC_ICON = 'application-x-executable-symbolic';
+
+/* Ultimo recurso quando nem IconName, nem IconThemePath, nem IconPixmap
+ * levam a lugar nenhum. Vale tambem como `fallback-icon-name` do St.Icon,
+ * que cobre o caso de o GIcon existir mas falhar ao carregar - a diferenca
+ * entre um icone generico honesto e o quadradinho de "image-missing". */
+export const GENERIC_ICON = 'application-x-executable-symbolic';
 
 let _cacheDir = null;
 const _written = new Set();
@@ -216,10 +221,16 @@ function iconFromName(name, themePath, size) {
 /* ------------------------------------------------------------------ */
 
 /**
- * Devolve o melhor GIcon possivel para as propriedades de um
- * StatusNotifierItem. Nunca retorna null.
+ * Igual a `resolve`, mas informa tambem se o icone devolvido e o generico
+ * de ultimo recurso. Quem chama usa isso para reforcar a identificacao por
+ * outros meios (dica de nome, log), ja que o desenho em si nao diz mais
+ * de que aplicativo se trata.
+ *
+ * @param {object} props propriedades do StatusNotifierItem
+ * @param {number} size tamanho desejado, em pixels
+ * @returns {{gicon: Gio.Icon, fallback: boolean}}
  */
-export function resolve(props, size) {
+export function resolveDetailed(props, size) {
     const attention = props?.Status === 'NeedsAttention';
 
     const name = (attention ? props?.AttentionIconName : '') || props?.IconName || '';
@@ -228,13 +239,36 @@ export function resolve(props, size) {
         : props?.IconPixmap) || [];
     const themePath = props?.IconThemePath || '';
 
-    return iconFromName(name, themePath, size)
-        ?? iconFromPixmaps(pixmaps, size)
-        // nome desconhecido e sem pixmap: deixa a cadeia de fallback do
-        // tema tentar, terminando em um icone generico visivel
-        ?? (name
-            ? new Gio.ThemedIcon({names: [...nameFallbacks(name), GENERIC_ICON]})
-            : new Gio.ThemedIcon({name: GENERIC_ICON}));
+    const named = iconFromName(name, themePath, size);
+    if (named)
+        return {gicon: named, fallback: false};
+
+    const pixmap = iconFromPixmaps(pixmaps, size);
+    if (pixmap)
+        return {gicon: pixmap, fallback: false};
+
+    // Nome desconhecido e sem pixmap: ainda vale deixar a cadeia de
+    // fallback do tema tentar.
+    //
+    // O generico NAO entra nesta lista. O Gio.ThemedIcon reordena os nomes
+    // que recebe - ele mesmo gera as variantes `-symbolic` e as intercala -
+    // e o generico acabaria sendo tentado antes da variante simbolica do
+    // proprio app. O ultimo recurso fica com o `fallback-icon-name` do
+    // St.Icon, que so entra em acao quando a cadeia inteira falhou.
+    return {
+        gicon: name
+            ? new Gio.ThemedIcon({names: nameFallbacks(name)})
+            : new Gio.ThemedIcon({name: GENERIC_ICON}),
+        fallback: true,
+    };
+}
+
+/**
+ * Devolve o melhor GIcon possivel para as propriedades de um
+ * StatusNotifierItem. Nunca retorna null.
+ */
+export function resolve(props, size) {
+    return resolveDetailed(props, size).gicon;
 }
 
 /** Icone para uma entrada de DBusMenu (icon-name ou icon-data). */

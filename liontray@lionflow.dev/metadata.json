@@ -1,11 +1,11 @@
 {
   "uuid": "liontray@lionflow.dev",
   "name": "LionTray",
-  "description": "Bandeja de sistema (StatusNotifierItem/AppIndicator) simples e direta, com reordenacao por arrastar e area de overflow, inspirada no comportamento do Windows.",
+  "description": "Bandeja de sistema (StatusNotifierItem/AppIndicator) simples e direta, com reordenação por arrastar e área de overflow, inspirada no comportamento do Windows.",
   "shell-version": [
     "46"
   ],
-  "version": 1,
+  "version": 2,
   "url": "https://github.com/Pianisuto/LionTray",
   "settings-schema": "org.gnome.shell.extensions.liontray",
   "gettext-domain": "liontray",

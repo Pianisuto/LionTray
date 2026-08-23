@@ -1,4 +1,23 @@
-/* LionTray - SPDX-License-Identifier: GPL-3.0-or-later */
+/* LionTray - SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * Regra geral: cor vem do tema do Shell, geometria vem daqui.
+ *
+ * Os botoes da bandeja carregam tambem a classe `panel-button`, entao
+ * hover/active/focus sao exatamente os do tema em uso - o Adwaita claro, o
+ * escuro e temas de terceiros (Zorin, Yaru...) redefinem todos
+ * `#panel .panel-button` com a mesma tecnica de preenchimento
+ * (`box-shadow: inset 0 0 0 100px`). Herdando isso, a bandeja acompanha o
+ * tema sem precisar adivinhar nenhuma cor.
+ *
+ * As regras abaixo mexem so em padding, raio e borda, e usam
+ * `#panel .liontray-container ...` (especificidade 1,2,0) para vencer
+ * `#panel .panel-button` (1,1,0) qualquer que seja a ordem de carga das
+ * folhas de estilo.
+ *
+ * O que nao vive dentro de `#panel` - o popup de overflow - nao alcanca
+ * essas regras do tema. Para essa parte, e so para ela, o JS aplica
+ * `liontray-light` ou `liontray-dark` conforme `Main.getStyleVariant()`.
+ */
 
 .liontray-container {
     spacing: 0;
@@ -6,36 +25,28 @@
 
 .liontray-box {
     spacing: 0;
+    /* garante um alvo de drop mesmo com a bandeja vazia */
     min-width: 16px;
 }
 
-/* Padding uniforme: o St.Icon e quadrado (icon_size x icon_size), entao
- * a area de hover sai quadrada em qualquer valor de icon-size. */
+/* Padding uniforme: o St.Icon e quadrado (icon_size x icon_size), entao a
+ * area de hover sai quadrada em qualquer valor de icon-size. A borda de 1px
+ * fica sempre reservada, transparente, para que o anel de foco do teclado
+ * apareca sem empurrar o layout. */
 .liontray-item {
-    padding: 4px;
+    padding: 3px;
+    border: 1px solid transparent;
     border-radius: 6px;
     transition-duration: 100ms;
 }
 
-.liontray-item:hover,
-.liontray-item:focus {
-    background-color: rgba(255, 255, 255, 0.12);
-}
-
-.liontray-item:active,
-.liontray-item:checked {
-    background-color: rgba(255, 255, 255, 0.2);
-}
-
-.liontray-attention .liontray-icon {
-    color: #f57900;
-}
-
-/* Marcador de insercao mostrado durante o arraste */
-.liontray-drop-indicator {
-    background-color: rgba(120, 180, 255, 0.9);
-    border-radius: 2px;
-    margin: 4px 1px;
+#panel .liontray-container .liontray-item {
+    -natural-hpadding: 0;
+    -minimum-hpadding: 0;
+    padding: 3px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-weight: normal;
 }
 
 /* Popup de overflow */
@@ -52,5 +63,120 @@
 .liontray-overflow-empty {
     padding: 0 6px;
     font-size: 0.9em;
+}
+
+.liontray-overflow-content {
+    spacing: 1px;
+}
+
+.liontray-overflow-count {
+    font-size: 0.8em;
+    font-weight: bold;
+    padding: 0 1px;
+}
+
+/* Marcador de insercao mostrado durante o arraste */
+.liontray-drop-indicator {
+    border-radius: 2px;
+    margin: 4px 1px;
+}
+
+/* Item sendo arrastado: continua no lugar, apagado, servindo de "de onde
+ * saiu". A opacidade em si e aplicada no JS; aqui fica so o rebaixamento
+ * do contorno para ele nao competir com o marcador de insercao. */
+.liontray-dragging {
+    border-color: transparent !important;
+}
+
+/* ▲ pronto para receber o item. Mesma tecnica de preenchimento do tema,
+ * entao nao ha salto de layout. */
+.liontray-drop-target {
+    border-radius: 6px;
+}
+
+.liontray-conflict-item {
+    padding: 3px 6px;
+}
+
+.liontray-conflict-text {
+    max-width: 320px;
+    padding: 4px 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* variante escura                                                      */
+/* ------------------------------------------------------------------ */
+
+.liontray-dark .liontray-overflow-box .liontray-item:hover,
+.liontray-dark .liontray-overflow-box .liontray-item:focus {
+    background-color: rgba(255, 255, 255, 0.17);
+}
+
+.liontray-dark .liontray-overflow-box .liontray-item:active {
+    background-color: rgba(255, 255, 255, 0.28);
+}
+
+.liontray-dark .liontray-overflow-empty {
     color: rgba(255, 255, 255, 0.6);
+}
+
+.liontray-dark .liontray-item:focus {
+    border-color: #62a0ea;
+}
+
+.liontray-dark .liontray-drop-indicator {
+    background-color: #62a0ea;
+}
+
+.liontray-dark .liontray-drop-target {
+    box-shadow: inset 0 0 0 100px rgba(98, 160, 234, 0.35);
+    border-color: #62a0ea;
+}
+
+/* #ff7800 e o mesmo laranja que o proprio Shell usa no indicador de
+ * privacidade do painel: chama atencao sem sair da paleta. */
+.liontray-dark .liontray-attention .liontray-icon {
+    color: #ff7800;
+}
+
+.liontray-dark .liontray-conflict .liontray-icon {
+    color: #ff7800;
+}
+
+/* ------------------------------------------------------------------ */
+/* variante clara                                                       */
+/* ------------------------------------------------------------------ */
+
+.liontray-light .liontray-overflow-box .liontray-item:hover,
+.liontray-light .liontray-overflow-box .liontray-item:focus {
+    background-color: rgba(40, 40, 40, 0.17);
+}
+
+.liontray-light .liontray-overflow-box .liontray-item:active {
+    background-color: rgba(40, 40, 40, 0.28);
+}
+
+.liontray-light .liontray-overflow-empty {
+    color: rgba(40, 40, 40, 0.6);
+}
+
+.liontray-light .liontray-item:focus {
+    border-color: #1c71d8;
+}
+
+.liontray-light .liontray-drop-indicator {
+    background-color: #1c71d8;
+}
+
+.liontray-light .liontray-drop-target {
+    box-shadow: inset 0 0 0 100px rgba(28, 113, 216, 0.3);
+    border-color: #1c71d8;
+}
+
+.liontray-light .liontray-attention .liontray-icon {
+    color: #c64600;
+}
+
+.liontray-light .liontray-conflict .liontray-icon {
+    color: #c64600;
 }

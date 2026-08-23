@@ -5,7 +5,11 @@
  *   _order   array de chaves estaveis, na ordem de exibicao. Contem
  *            tambem chaves de apps que nao estao rodando agora, para que
  *            a organizacao sobreviva a fechar/reabrir o aplicativo.
- *   _hidden  subconjunto de _order que vive no popup de overflow.
+ *   _hidden  subconjunto de _order que vive no popup de overflow por
+ *            escolha explicita do usuario.
+ *   _pinned  subconjunto de _order que o usuario arrastou para o painel.
+ *            Serve para o item ficar imune a ocultacao automatica de
+ *            indicadores passivos.
  *
  * Os atores sao sempre derivados do modelo (_sync), nunca o contrario.
  */
@@ -16,13 +20,33 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 
 import {IndicatorButton} from './indicatorButton.js';
+import {ThemeVariant} from './theming.js';
+import {Tooltip} from './tooltip.js';
 import {StatusNotifierItem} from './statusNotifierItem.js';
 import {makeStableKey, warn} from './util.js';
 
 const MAX_REMEMBERED_KEYS = 200;
+
+/* Um numero solto ao lado do ▲ so ajuda quando ha mais de um item la
+ * dentro; com um so, o proprio ▲ ja diz tudo. */
+const MIN_COUNT_BADGE = 2;
+
+/* Quanto tempo o ponteiro precisa ficar parado sobre o ▲, durante um
+ * arraste, para o overflow abrir sozinho. */
+const OVERFLOW_PEEK_MS = 500;
+
+/* Duracao do deslizamento dos vizinhos quando a ordem muda. */
+const REORDER_MS = 130;
+
+const PANEL_BOXES = {
+    left: () => Main.panel._leftBox,
+    center: () => Main.panel._centerBox,
+    right: () => Main.panel._rightBox,
+};
 
 /**
  * Gerenciador de menus proprio da bandeja.
@@ -41,11 +65,49 @@ const MAX_REMEMBERED_KEYS = 200;
 class TrayMenuManager extends PopupMenu.PopupMenuManager {
     _changeMenu() {
     }
+
+    /**
+     * Abre um menu sem tomar o grab modal.
+     *
+     * Existe por causa do overflow que se abre sozinho durante um arraste.
+     * O caminho normal (_onMenuOpenState) faz Main.pushModal(menu.actor), o
+     * que tiraria o grab do dnd.js e mataria o arraste no meio. Sem grab o
+     * popup nao consegue se fechar sozinho, entao quem chama fica
+     * responsavel por fecha-lo - a bandeja faz isso no fim do arraste.
+     */
+    openWithoutGrab(menu) {
+        if (menu.isOpen)
+            return;
+        this._openingWithoutGrab = true;
+        try {
+            // sem animacao: no meio de um arraste o popup costuma estar
+            // reabrindo logo depois de um close, e o cruzamento das duas
+            // animacoes pisca
+            menu.open(BoxPointer.PopupAnimation.NONE);
+        } finally {
+            this._openingWithoutGrab = false;
+        }
+    }
+
+    _onMenuOpenState(menu, open) {
+        // na abertura sem grab o menu nunca vira activeMenu, entao o
+        // fechamento correspondente tambem cai fora daqui sozinho
+        if (open && this._openingWithoutGrab)
+            return;
+        super._onMenuOpenState(menu, open);
+    }
 }
 
 export class LionTray {
-    constructor(settings) {
+    /**
+     * @param {Gio.Settings} settings
+     * @param {object} [callbacks]
+     * @param {Function} [callbacks.openPreferences] abre a janela de preferencias
+     */
+    constructor(settings, callbacks = {}) {
         this._settings = settings;
+        this._openPreferences = callbacks.openPreferences ?? null;
+
         this._items = new Map();     // key -> {key, sni, button}
         this._byBus = new Map();     // "busName+path" -> key
         this._pending = new Set();   // "busName+path" em carregamento
@@ -53,20 +115,30 @@ export class LionTray {
         this._dragActive = false;
         this._writingSettings = false;
         this._syncLaterId = 0;
+        this._peekId = 0;
+        this._conflict = null;
         this._destroyed = false;
 
         this._order = settings.get_strv('order');
         this._hidden = new Set(settings.get_strv('hidden'));
+        this._pinned = new Set(settings.get_strv('pinned'));
 
         this.menuManager = new TrayMenuManager(this);
+        this.theme = new ThemeVariant();
+        this.tooltip = new Tooltip();
 
         this._buildUI();
 
         this._settingsIds = [
             settings.connect('changed::icon-size', () => this._onIconSizeChanged()),
             settings.connect('changed::hide-overflow-when-empty', () => this._sync()),
+            settings.connect('changed::show-overflow-count', () => this._sync()),
+            settings.connect('changed::hide-passive', () => this._sync()),
+            settings.connect('changed::panel-box', () => this._placeInPanel()),
+            settings.connect('changed::panel-position', () => this._placeInPanel()),
             settings.connect('changed::order', () => this._reloadFromSettings()),
             settings.connect('changed::hidden', () => this._reloadFromSettings()),
+            settings.connect('changed::pinned', () => this._reloadFromSettings()),
         ];
     }
 
@@ -84,6 +156,7 @@ export class LionTray {
             reactive: true,
             y_align: Clutter.ActorAlign.FILL,
         });
+        this.theme.track(this._container);
 
         this._trayBox = new St.BoxLayout({
             style_class: 'liontray-box',
@@ -95,39 +168,85 @@ export class LionTray {
             acceptDrop: (source, actor, x) => this._onDropInTray(source, x),
         };
 
+        this._buildOverflowButton();
+
+        this._container.add_child(this._trayBox);
+        this._container.add_child(this._overflowButton);
+
+        this._placeInPanel();
+
+        this._buildOverflowMenu();
+        this._buildOverflowContextMenu();
+        this._updateIconSize();
+        this._sync();
+    }
+
+    _buildOverflowButton() {
+        this._overflowIcon = new St.Icon({
+            icon_name: 'pan-up-symbolic',
+            style_class: 'liontray-icon',
+        });
+        this._overflowCount = new St.Label({
+            style_class: 'liontray-overflow-count',
+            y_align: Clutter.ActorAlign.CENTER,
+            visible: false,
+        });
+
+        const content = new St.BoxLayout({
+            style_class: 'liontray-overflow-content',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        content.add_child(this._overflowIcon);
+        content.add_child(this._overflowCount);
+
         this._overflowButton = new St.Button({
-            style_class: 'liontray-item liontray-overflow-button',
+            style_class: 'panel-button liontray-item liontray-overflow-button',
             reactive: true,
             can_focus: true,
             track_hover: true,
+            button_mask: St.ButtonMask.ONE | St.ButtonMask.THREE,
             y_align: Clutter.ActorAlign.CENTER,
-            child: new St.Icon({
-                icon_name: 'pan-up-symbolic',
-                style_class: 'liontray-icon',
-            }),
+            child: content,
         });
         this._overflowButton._delegate = {
             handleDragOver: source => this._onDragOverOverflowButton(source),
             acceptDrop: source => this._onDropInOverflow(source, -1),
         };
-        this._overflowButton.connect('button-press-event', () => {
-            this._overflowMenu.toggle();
+
+        this._overflowButton.connect('button-press-event', (_a, event) => {
+            // o ponteiro nao se move ao clicar, entao a dica ja agendada
+            // ainda apareceria - por cima do popup que esta abrindo
+            this.tooltip?.hide();
+            if (event.get_button() === Clutter.BUTTON_SECONDARY)
+                this._overflowContextMenu.toggle();
+            else
+                this._overflowMenu.toggle();
             return Clutter.EVENT_STOP;
         });
+        // o caminho acima consome o clique do mouse; `clicked` so sobra
+        // para Enter/espaco, que e como o teclado chega aqui
+        this._overflowButton.connect('clicked', () => this._overflowMenu.toggle());
+        this._overflowButton.connect('notify::hover', () => {
+            if (this._overflowButton.hover && !this._dragActive)
+                this.tooltip?.scheduleFor(this._overflowButton, this._overflowTooltip());
+            else
+                this.tooltip?.hide();
+        });
+    }
 
-        this._container.add_child(this._trayBox);
-        this._container.add_child(this._overflowButton);
-
-        Main.panel._rightBox.insert_child_at_index(this._container, 0);
-
-        this._buildOverflowMenu();
-        this._updateIconSize();
-        this._sync();
+    _overflowTooltip() {
+        const count = this._hiddenKeys().length;
+        if (count === 0)
+            return 'Indicadores ocultos (vazio)';
+        return count === 1
+            ? '1 indicador oculto'
+            : `${count} indicadores ocultos`;
     }
 
     _buildOverflowMenu() {
         this._overflowMenu = new PopupMenu.PopupMenu(this._overflowButton, 0.5, St.Side.TOP);
         this._overflowMenu.actor.add_style_class_name('liontray-overflow-menu');
+        this.theme.track(this._overflowMenu.actor);
 
         this._overflowItem = new PopupMenu.PopupBaseMenuItem({
             reactive: false,
@@ -149,7 +268,7 @@ export class LionTray {
 
         this._emptyLabel = new St.Label({
             style_class: 'liontray-overflow-empty',
-            text: 'Arraste icones aqui para oculta-los',
+            text: 'Arraste ícones aqui para ocultá-los',
             y_align: Clutter.ActorAlign.CENTER,
         });
         this._overflowBox.add_child(this._emptyLabel);
@@ -162,8 +281,64 @@ export class LionTray {
         this.menuManager.addMenu(this._overflowMenu);
     }
 
+    /**
+     * Menu de contexto do ▲: um lugar para as preferencias que nao exija
+     * decorar `gnome-extensions prefs liontray@lionflow.dev`. Fica no
+     * botao direito de proposito - o popup normal continua sendo so a
+     * lista de indicadores ocultos.
+     */
+    _buildOverflowContextMenu() {
+        this._overflowContextMenu =
+            new PopupMenu.PopupMenu(this._overflowButton, 0.5, St.Side.TOP);
+        this._overflowContextMenu.actor.add_style_class_name('liontray-context-menu');
+        this.theme.track(this._overflowContextMenu.actor);
+
+        const prefs = new PopupMenu.PopupImageMenuItem(
+            'Preferências do LionTray', 'emblem-system-symbolic');
+        prefs.connect('activate', () => {
+            this._overflowContextMenu.close();
+            this._openPreferences?.();
+        });
+        this._overflowContextMenu.addMenuItem(prefs);
+
+        Main.layoutManager.uiGroup.add_child(this._overflowContextMenu.actor);
+        this._overflowContextMenu.actor.hide();
+        this.menuManager.addMenu(this._overflowContextMenu);
+    }
+
+    /**
+     * Coloca a bandeja na caixa e no indice escolhidos. O painel tem tres
+     * caixas (esquerda, centro, direita); dentro delas a posicao e um
+     * indice simples, e a ordem dos indicadores continua sendo assunto do
+     * arrastar.
+     */
+    _placeInPanel() {
+        if (this._destroyed || !this._container)
+            return;
+
+        const name = this._settings.get_string('panel-box');
+        const box = (PANEL_BOXES[name] ?? PANEL_BOXES.right)();
+        if (!box)
+            return;
+
+        const parent = this._container.get_parent();
+        if (parent === box) {
+            // ja estamos na caixa: o proprio container conta no total
+            const index = Math.min(this._settings.get_int('panel-position'),
+                box.get_n_children() - 1);
+            box.set_child_at_index(this._container, Math.max(index, 0));
+            return;
+        }
+
+        parent?.remove_child(this._container);
+        const index = Math.min(this._settings.get_int('panel-position'),
+            box.get_n_children());
+        box.insert_child_at_index(this._container, index);
+    }
+
     closeOverflow() {
         this._overflowMenu?.close();
+        this._overflowContextMenu?.close();
     }
 
     get dragInProgress() {
@@ -264,6 +439,11 @@ export class LionTray {
         return `${base}#${Date.now()}`;
     }
 
+    /** Um indicador mudou de Status; Passive muda onde ele deve aparecer. */
+    onItemStatusChanged(_button) {
+        this._syncLater();
+    }
+
     /* ---------------------------------------------------------------- */
     /* modelo -> atores                                                  */
     /* ---------------------------------------------------------------- */
@@ -279,21 +459,43 @@ export class LionTray {
         return this._order;
     }
 
+    /**
+     * Ocultacao automatica de indicadores passivos.
+     *
+     * `Passive` no protocolo StatusNotifierItem quer dizer "estou
+     * registrado, mas nao tenho nada a dizer agora" - o caso do
+     * update-notifier do Zorin, que fica no barramento o tempo todo e so
+     * interessa quando ha atualizacao. Some do painel e volta sozinho ao
+     * mudar para Active ou NeedsAttention.
+     *
+     * Nao mexe em `_hidden`: o estado do usuario continua intacto por
+     * baixo. E arrastar o item para o painel fixa-o (`_pinned`), o que da
+     * a ultima palavra a quem esta na frente da tela.
+     */
+    _autoHidden(key) {
+        if (!this._settings.get_boolean('hide-passive'))
+            return false;
+        if (this._hidden.has(key) || this._pinned.has(key))
+            return false;
+        return this._items.get(key)?.sni.status === 'Passive';
+    }
+
     _visibleKeys() {
-        return this._orderedKeys().filter(k => this._items.has(k) && !this._hidden.has(k));
+        return this._orderedKeys().filter(k =>
+            this._items.has(k) && !this._hidden.has(k) && !this._autoHidden(k));
     }
 
     _hiddenKeys() {
-        return this._orderedKeys().filter(k => this._items.has(k) && this._hidden.has(k));
+        return this._orderedKeys().filter(k =>
+            this._items.has(k) && (this._hidden.has(k) || this._autoHidden(k)));
     }
 
     _sync() {
         if (this._destroyed)
             return;
 
-        const skip = this._draggingKey;
-        const visible = this._visibleKeys().filter(k => k !== skip);
-        const hidden = this._hiddenKeys().filter(k => k !== skip);
+        const visible = this._visibleKeys();
+        const hidden = this._hiddenKeys();
 
         this._reparent(this._trayBox, visible.map(k => this._items.get(k).button));
         this._reparent(this._overflowBox, hidden.map(k => this._items.get(k).button));
@@ -301,8 +503,13 @@ export class LionTray {
         this._emptyLabel.visible = hidden.length === 0;
         this._overflowBox.set_child_at_index(this._emptyLabel, hidden.length);
 
-        const hasHidden = this._hiddenKeys().length > 0;
-        const showOverflow = hasHidden || this._dragActive ||
+        const showCount = this._settings.get_boolean('show-overflow-count') &&
+            hidden.length >= MIN_COUNT_BADGE;
+        this._overflowCount.visible = showCount;
+        if (showCount)
+            this._overflowCount.text = String(hidden.length);
+
+        const showOverflow = hidden.length > 0 || this._dragActive ||
             !this._settings.get_boolean('hide-overflow-when-empty');
 
         this._overflowButton.visible = showOverflow;
@@ -320,16 +527,79 @@ export class LionTray {
         });
     }
 
+    /**
+     * Poe `actors` em `box`, nessa ordem, e desliza quem mudou de lugar.
+     *
+     * A animacao dispensa medir alocacoes: todos os botoes tem a mesma
+     * largura (icone quadrado + padding uniforme), entao a distancia
+     * percorrida e a diferenca de indice vezes a largura de um item. Sai
+     * exata e sincrona, sem esperar o proximo layout.
+     */
     _reparent(box, actors) {
+        // posicoes de antes da reordenacao: nada foi realocado ainda, entao
+        // `x` ainda e o valor do frame anterior
+        const before = box.get_children()
+            .filter(c => c.isLionTrayItem)
+            .map(actor => ({actor, x: actor.x}));
+
         actors.forEach((actor, index) => {
             const parent = actor.get_parent();
             if (parent !== box) {
                 parent?.remove_child(actor);
                 box.add_child(actor);
             }
-            // o DND deixa posicao fixa/opacidade alteradas no ator
-            actor.resetTransform?.();
             box.set_child_at_index(actor, index);
+        });
+
+        this._animateReorder(box, before);
+    }
+
+    /**
+     * Desliza os indicadores que mudaram de lugar.
+     *
+     * Comeca zerando `translation_x` de todos. Sem isso, um item que sai da
+     * caixa no meio da animacao - ou que e desmapeado junto com o popup de
+     * overflow ao fechar - fica com o deslocamento congelado e passa a ser
+     * desenhado por cima do vizinho.
+     */
+    _animateReorder(box, before) {
+        const items = box.get_children().filter(c => c.isLionTrayItem);
+
+        for (const item of items) {
+            item.remove_transition('translation-x');
+            item.translation_x = 0;
+        }
+
+        // dentro de um popup fechado nao ha alocacao valida para medir, e
+        // animar o que ninguem ve so cria estado para dar errado
+        if (!box.mapped)
+            return;
+
+        // Passo real entre dois itens, ja incluindo o `spacing` da caixa -
+        // a bandeja usa 0 e o overflow usa 2px. Com menos de dois itens
+        // antes, nenhum deles pode ter trocado de posicao.
+        if (before.length < 2)
+            return;
+
+        // Medido, nao calculado: em RTL a caixa cresce para a esquerda e o
+        // passo ja sai negativo sozinho, sem precisar de correcao de sinal.
+        const step = before[1].x - before[0].x;
+        if (step === 0)
+            return;
+
+        const previousItems = before.map(entry => entry.actor);
+
+        items.forEach((child, index) => {
+            const previous = previousItems.indexOf(child);
+            if (previous < 0 || previous === index)
+                return;
+
+            child.translation_x = (previous - index) * step;
+            child.ease({
+                translation_x: 0,
+                duration: REORDER_MS,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
         });
     }
 
@@ -341,7 +611,8 @@ export class LionTray {
 
     _updateIconSize() {
         const size = this.iconSize;
-        this._overflowButton.get_child().icon_size = size;
+        this._overflowIcon.icon_size = size;
+        this._conflictButton?.get_child().set({icon_size: size});
         this._dropIndicatorWidth = Math.max(2, Math.round(size / 8));
     }
 
@@ -352,17 +623,37 @@ export class LionTray {
     onDragBegin(button) {
         this._draggingKey = button.key;
         this._dragActive = true;
+        this.tooltip?.hide();
         // o botao de overflow precisa existir para receber o drop mesmo
         // quando nenhum indicador esta oculto
         this._overflowButton.visible = true;
+
+        // Pegar um item que vive no overflow: o popup precisa continuar
+        // aberto, senao nao ha onde reordenar la dentro. O grab modal e
+        // que atrapalha o arraste, nao o popup em si - entao fecha (que e
+        // o que solta o grab) e reabre sem ele.
+        const fromOverflow = button.get_parent() === this._overflowBox;
         this.closeAllMenus();
+        if (fromOverflow)
+            this.menuManager.openWithoutGrab(this._overflowMenu);
     }
 
     onDragEnd() {
         this._draggingKey = null;
         this._dragActive = false;
+        this._cancelOverflowPeek();
         this._removeIndicator();
+        this._clearDropTarget();
+        // o overflow aberto durante o arraste nao tem grab, entao nao sabe
+        // se fechar sozinho
+        this.closeOverflow();
         this._syncLater();
+    }
+
+    _draggingActor() {
+        return this._draggingKey
+            ? this._items.get(this._draggingKey)?.button ?? null
+            : null;
     }
 
     _indicator() {
@@ -377,23 +668,63 @@ export class LionTray {
 
     _removeIndicator() {
         this._dropIndicator?.get_parent()?.remove_child(this._dropIndicator);
+        this._indicatorBox = null;
+        this._indicatorIndex = -1;
     }
 
+    /**
+     * Poe o marcador antes do `index`-esimo indicador de `box`.
+     *
+     * O indice vem de `_indexForX`, que conta so os indicadores. A caixa
+     * tem tambem o proprio marcador, a etiqueta de "vazio" e o item sendo
+     * arrastado, entao ele nao serve como indice bruto de filho - traduzir
+     * os dois e o que mantem o marcador no lugar que o usuario ve.
+     */
     _showIndicator(box, index) {
+        if (this._indicatorBox === box && this._indicatorIndex === index)
+            return;
+
         const indicator = this._indicator();
-        if (indicator.get_parent() !== box) {
-            this._removeIndicator();
-            box.insert_child_at_index(indicator, index);
-        } else {
-            box.set_child_at_index(indicator, index);
-        }
+        // sair da caixa antes de recalcular: assim o indice bruto nao
+        // depende de onde o marcador estava
+        indicator.get_parent()?.remove_child(indicator);
+        box.insert_child_at_index(indicator, this._rawIndex(box, index));
+
+        this._indicatorBox = box;
+        this._indicatorIndex = index;
     }
 
-    /** Indice de insercao a partir da coordenada X local da caixa. */
+    /** Indice de filho correspondente ao `index`-esimo indicador. */
+    _rawIndex(box, index) {
+        const dragging = this._draggingActor();
+        const children = box.get_children();
+        let seen = 0;
+
+        for (let i = 0; i < children.length; i++) {
+            const child = children[i];
+            if (child === this._dropIndicator || child === this._emptyLabel ||
+                child === dragging)
+                continue;
+            if (seen === index)
+                return i;
+            seen++;
+        }
+        return children.length;
+    }
+
+    /**
+     * Indice de insercao a partir da coordenada X local da caixa.
+     *
+     * O item arrastado continua na caixa (apagado) durante o arraste, mas
+     * nao conta: `_place` calcula a posicao contra a lista de irmaos, ja
+     * sem ele.
+     */
     _indexForX(box, x) {
+        const dragging = this._draggingActor();
         let index = 0;
         for (const child of box.get_children()) {
-            if (child === this._dropIndicator || child === this._emptyLabel)
+            if (child === this._dropIndicator || child === this._emptyLabel ||
+                child === dragging)
                 continue;
             if (x < child.x + child.width / 2)
                 return index;
@@ -405,7 +736,8 @@ export class LionTray {
     _onDragOverBox(box, source, x) {
         if (!source?.isLionTrayItem)
             return DND.DragMotionResult.NO_DROP;
-        this._overflowButton.remove_style_pseudo_class('active');
+        this._cancelOverflowPeek();
+        this._clearDropTarget();
         this._showIndicator(box, this._indexForX(box, x));
         return DND.DragMotionResult.MOVE_DROP;
     }
@@ -414,8 +746,36 @@ export class LionTray {
         if (!source?.isLionTrayItem)
             return DND.DragMotionResult.NO_DROP;
         this._removeIndicator();
-        this._overflowButton.add_style_pseudo_class('active');
+        this._overflowButton.add_style_class_name('liontray-drop-target');
+        this._scheduleOverflowPeek();
         return DND.DragMotionResult.MOVE_DROP;
+    }
+
+    _clearDropTarget() {
+        this._overflowButton?.remove_style_class_name('liontray-drop-target');
+    }
+
+    /**
+     * Segurar o item sobre o ▲ abre o overflow. Sem isso, reposicionar um
+     * indicador ja oculto exigiria soltar, clicar e arrastar de novo.
+     */
+    _scheduleOverflowPeek() {
+        if (this._peekId || this._overflowMenu.isOpen)
+            return;
+        this._peekId = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT, OVERFLOW_PEEK_MS, () => {
+                this._peekId = 0;
+                if (this._dragActive && !this._destroyed)
+                    this.menuManager.openWithoutGrab(this._overflowMenu);
+                return GLib.SOURCE_REMOVE;
+            });
+    }
+
+    _cancelOverflowPeek() {
+        if (this._peekId) {
+            GLib.source_remove(this._peekId);
+            this._peekId = 0;
+        }
     }
 
     _onDropInTray(source, x) {
@@ -423,7 +783,7 @@ export class LionTray {
             return false;
         const index = this._indexForX(this._trayBox, x);
         this._removeIndicator();
-        this._overflowButton.remove_style_pseudo_class('active');
+        this._clearDropTarget();
         this._place(source.key, index, false);
         return true;
     }
@@ -432,7 +792,7 @@ export class LionTray {
         if (!source?.isLionTrayItem)
             return false;
         this._removeIndicator();
-        this._overflowButton.remove_style_pseudo_class('active');
+        this._clearDropTarget();
         this._place(source.key, index, true);
         return true;
     }
@@ -444,10 +804,18 @@ export class LionTray {
     _place(key, index, hidden) {
         this._draggingKey = null;
 
-        if (hidden)
+        if (hidden) {
             this._hidden.add(key);
-        else
+            this._pinned.delete(key);
+        } else {
             this._hidden.delete(key);
+            // Fixar so quando o item esta Passive neste momento, ou seja,
+            // quando o gesto contraria a ocultacao automatica. Reordenar um
+            // indicador ativo nao pode desligar a regra em silencio para
+            // ele; contrariar a regra explicitamente, sim.
+            if (this._items.get(key)?.sni.status === 'Passive')
+                this._pinned.add(key);
+        }
 
         const siblings = (hidden ? this._hiddenKeys() : this._visibleKeys())
             .filter(k => k !== key);
@@ -465,6 +833,137 @@ export class LionTray {
     }
 
     /* ---------------------------------------------------------------- */
+    /* teclado                                                           */
+    /* ---------------------------------------------------------------- */
+
+    _isHidden(key) {
+        return this._hidden.has(key) || this._autoHidden(key);
+    }
+
+    /** Ctrl+seta: move o indicador focado uma casa na lista em que esta. */
+    moveByKey(button, delta) {
+        const hidden = this._isHidden(button.key);
+        const siblings = hidden ? this._hiddenKeys() : this._visibleKeys();
+        const from = siblings.indexOf(button.key);
+        const to = from + delta;
+        if (from < 0 || to < 0 || to >= siblings.length)
+            return false;
+
+        this._place(button.key, to, hidden);
+        button.grab_key_focus();
+        return true;
+    }
+
+    /**
+     * Ctrl+baixo manda para o overflow, Ctrl+cima traz de volta.
+     *
+     * Ao ocultar, o foco vai para o ▲ - e para onde o item foi, e deixar o
+     * foco em um ator que agora vive dentro de um popup fechado tiraria a
+     * navegacao por teclado do painel.
+     */
+    setHiddenByKey(button, hidden) {
+        if (this._isHidden(button.key) === hidden)
+            return false;
+
+        this._place(button.key, -1, hidden);
+        if (hidden)
+            this._overflowButton.grab_key_focus();
+        else
+            button.grab_key_focus();
+        return true;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* conflito de watcher                                               */
+    /* ---------------------------------------------------------------- */
+
+    /**
+     * Sem a posse de org.kde.StatusNotifierWatcher a bandeja fica vazia. A
+     * notificacao do bootstrap avisa uma vez; este botao fica no painel
+     * enquanto o problema durar, para o motivo continuar a um clique de
+     * distancia.
+     *
+     * @param {?{title: string, body: string}} info null limpa o aviso
+     */
+    setWatcherConflict(info) {
+        if (this._destroyed)
+            return;
+
+        this._conflict = info;
+
+        if (!info) {
+            this._conflictButton?.destroy();
+            this._conflictButton = null;
+            this._conflictMenu = null;
+            return;
+        }
+
+        if (!this._conflictButton)
+            this._buildConflictButton();
+
+        this._conflictLabel.text = info.body;
+        this._conflictButton.accessible_name = info.title;
+    }
+
+    _buildConflictButton() {
+        this._conflictButton = new St.Button({
+            style_class: 'panel-button liontray-item liontray-conflict',
+            reactive: true,
+            can_focus: true,
+            track_hover: true,
+            y_align: Clutter.ActorAlign.CENTER,
+            child: new St.Icon({
+                icon_name: 'dialog-warning-symbolic',
+                style_class: 'liontray-icon',
+                icon_size: this.iconSize,
+            }),
+        });
+        this._container.insert_child_at_index(this._conflictButton, 0);
+
+        this._conflictMenu =
+            new PopupMenu.PopupMenu(this._conflictButton, 0.5, St.Side.TOP);
+        this._conflictMenu.actor.add_style_class_name('liontray-context-menu');
+        this.theme.track(this._conflictMenu.actor);
+
+        const textItem = new PopupMenu.PopupBaseMenuItem({
+            reactive: false,
+            can_focus: false,
+            style_class: 'liontray-conflict-item',
+        });
+        this._conflictLabel = new St.Label({style_class: 'liontray-conflict-text'});
+        this._conflictLabel.clutter_text.line_wrap = true;
+        textItem.add_child(this._conflictLabel);
+        this._conflictMenu.addMenuItem(textItem);
+
+        this._conflictMenu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+        const prefs = new PopupMenu.PopupImageMenuItem(
+            'Preferências do LionTray', 'emblem-system-symbolic');
+        prefs.connect('activate', () => {
+            this._conflictMenu.close();
+            this._openPreferences?.();
+        });
+        this._conflictMenu.addMenuItem(prefs);
+
+        Main.layoutManager.uiGroup.add_child(this._conflictMenu.actor);
+        this._conflictMenu.actor.hide();
+        this.menuManager.addMenu(this._conflictMenu);
+
+        this._conflictButton.connect('clicked', () => this._conflictMenu.toggle());
+        this._conflictButton.connect('notify::hover', () => {
+            if (this._conflictButton.hover)
+                this.tooltip?.scheduleFor(this._conflictButton, this._conflict?.title);
+            else
+                this.tooltip?.hide();
+        });
+        this._conflictButton.connect('destroy', () => {
+            this.theme?.untrack(this._conflictMenu.actor);
+            this.menuManager.removeMenu(this._conflictMenu);
+            this._conflictMenu.destroy();
+        });
+    }
+
+    /* ---------------------------------------------------------------- */
     /* persistencia                                                      */
     /* ---------------------------------------------------------------- */
 
@@ -476,16 +975,21 @@ export class LionTray {
             const stale = this._order.filter(k => !live.has(k));
             const drop = new Set(stale.slice(0, this._order.length - MAX_REMEMBERED_KEYS));
             this._order = this._order.filter(k => !drop.has(k));
-            for (const k of drop)
+            for (const k of drop) {
                 this._hidden.delete(k);
+                this._pinned.delete(k);
+            }
         }
 
-        const hidden = [...this._hidden].filter(k => this._order.includes(k));
+        const known = new Set(this._order);
+        const hidden = [...this._hidden].filter(k => known.has(k));
+        const pinned = [...this._pinned].filter(k => known.has(k));
 
         this._writingSettings = true;
         try {
             this._settings.set_strv('order', this._order);
             this._settings.set_strv('hidden', hidden);
+            this._settings.set_strv('pinned', pinned);
         } finally {
             this._writingSettings = false;
         }
@@ -496,6 +1000,7 @@ export class LionTray {
             return;
         this._order = this._settings.get_strv('order');
         this._hidden = new Set(this._settings.get_strv('hidden'));
+        this._pinned = new Set(this._settings.get_strv('pinned'));
         this._sync();
     }
 
@@ -512,6 +1017,7 @@ export class LionTray {
             GLib.source_remove(this._syncLaterId);
             this._syncLaterId = 0;
         }
+        this._cancelOverflowPeek();
 
         for (const id of this._settingsIds)
             this._settings.disconnect(id);
@@ -529,17 +1035,33 @@ export class LionTray {
         this._dropIndicator?.destroy();
         this._dropIndicator = null;
 
-        if (this._overflowMenu) {
-            this.menuManager.removeMenu(this._overflowMenu);
-            this._overflowMenu.destroy();
-            this._overflowMenu = null;
+        this.tooltip.destroy();
+        this.tooltip = null;
+
+        for (const menu of [this._overflowMenu, this._overflowContextMenu]) {
+            if (!menu)
+                continue;
+            this.menuManager.removeMenu(menu);
+            menu.destroy();
         }
+        this._overflowMenu = null;
+        this._overflowContextMenu = null;
+
+        // o handler de destroy do botao cuida do menu de conflito
+        this._conflictButton?.destroy();
+        this._conflictButton = null;
+        this._conflictMenu = null;
+
+        this.theme.destroy();
+        this.theme = null;
 
         this._container?.destroy();
         this._container = null;
         this._trayBox = null;
         this._overflowBox = null;
         this._overflowButton = null;
+        this._overflowIcon = null;
+        this._overflowCount = null;
         this._emptyLabel = null;
     }
 }

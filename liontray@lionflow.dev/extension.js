@@ -20,6 +20,8 @@ import * as IconResolver from './lib/iconResolver.js';
  * notificar de imediato geraria alarme falso. */
 const CONFLICT_NOTIFY_DELAY = 3;
 
+const CONFLICT_TITLE = 'Outro AppIndicator está ativo';
+
 export default class LionTrayExtension extends Extension {
     enable() {
         IconResolver.init(this.uuid);
@@ -28,7 +30,9 @@ export default class LionTrayExtension extends Extension {
         this._conflictNotified = false;
 
         this._settings = this.getSettings();
-        this._tray = new LionTray(this._settings);
+        this._tray = new LionTray(this._settings, {
+            openPreferences: () => this.openPreferences(),
+        });
         this._watcher = new StatusNotifierWatcher();
 
         this._watcherIds = [
@@ -43,6 +47,7 @@ export default class LionTrayExtension extends Extension {
             }),
             this._watcher.connect('name-acquired', () => {
                 this._clearConflict();
+                this._tray?.setWatcherConflict(null);
             }),
         ];
 
@@ -71,7 +76,7 @@ export default class LionTrayExtension extends Extension {
     /**
      * Sem a posse de org.kde.StatusNotifierWatcher o LionTray nao recebe
      * indicador nenhum, e a bandeja fica vazia sem dar nenhuma pista do
-     * porque. Aqui o motivo vira log e notificacao.
+     * porque. Aqui o motivo vira log, notificacao e um aviso no painel.
      */
     _onWatcherConflict(info) {
         const owner = info?.command
@@ -89,7 +94,12 @@ export default class LionTrayExtension extends Extension {
             GLib.PRIORITY_DEFAULT, CONFLICT_NOTIFY_DELAY, () => {
                 this._conflictTimeoutId = 0;
                 this._conflictNotified = true;
-                Main.notify('Outro AppIndicator esta ativo', this._conflictHint(info));
+
+                const body = this._conflictHint(info);
+                // A notificacao passa uma vez so; o aviso no painel fica
+                // enquanto o conflito durar.
+                Main.notify(CONFLICT_TITLE, body);
+                this._tray?.setWatcherConflict({title: CONFLICT_TITLE, body});
                 return GLib.SOURCE_REMOVE;
             });
     }
@@ -97,13 +107,13 @@ export default class LionTrayExtension extends Extension {
     _conflictHint(info) {
         // dono sendo o proprio Shell significa outra extensao de tray
         if (info?.command === 'gnome-shell') {
-            return 'Outra extensao esta controlando a bandeja do sistema. ' +
+            return 'Outra extensão está controlando a bandeja do sistema. ' +
                 'Desative-a (por exemplo zorin-appindicator@zorinos.com) e ' +
                 'reinicie o GNOME Shell para o LionTray assumir.';
         }
 
         const owner = info?.command ? `"${info.command}"` : 'Outro programa';
-        return `${owner} esta controlando a bandeja do sistema. ` +
+        return `${owner} está controlando a bandeja do sistema. ` +
             'Feche-o e reinicie o GNOME Shell para o LionTray assumir.';
     }
 

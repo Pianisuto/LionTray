@@ -85,6 +85,24 @@ async function main() {
     const iconFallback = IconResolver.resolve({IconName: 'nao-existe-em-lugar-nenhum'}, 16);
     check('IconName inexistente ainda devolve um GIcon', iconFallback !== null);
 
+    // 5b. resolveDetailed avisa quando caiu no icone generico, para a UI
+    //     poder reforcar a identificacao por outros meios (dica de nome)
+    const broken = IconResolver.resolveDetailed({IconName: 'nao-existe-em-lugar-nenhum'}, 16);
+    check('icone quebrado marcado como fallback', broken.fallback === true);
+    check('cadeia de fallback nao mistura o generico com os nomes do app',
+        !broken.gicon.get_names().includes('application-x-executable-symbolic'),
+        JSON.stringify(broken.gicon.get_names()));
+
+    const semNome = IconResolver.resolveDetailed({}, 16);
+    check('sem IconName nem IconPixmap -> generico',
+        semNome.fallback === true &&
+        semNome.gicon.get_names().includes('application-x-executable-symbolic'));
+
+    check('IconPixmap resolvido nao e fallback',
+        IconResolver.resolveDetailed(sni.props, 16).fallback === false);
+    check('IconName do tema nao e fallback',
+        IconResolver.resolveDetailed({IconName: 'folder', Status: 'Active'}, 16).fallback === false);
+
     // 6. metodos do protocolo
     sni.activate(10, 20);
     sni.secondaryActivate(1, 2);

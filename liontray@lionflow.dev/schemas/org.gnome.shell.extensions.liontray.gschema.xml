@@ -6,26 +6,62 @@
     <key name="icon-size" type="i">
       <default>18</default>
       <range min="12" max="32"/>
-      <summary>Tamanho dos icones</summary>
-      <description>Tamanho, em pixels, dos icones dos indicadores no painel. Um pouco acima dos 16px do painel do GNOME porque muitos apps entregam o icone via IconPixmap com margem transparente embutida.</description>
+      <summary>Tamanho dos ícones</summary>
+      <description>Tamanho, em pixels, dos ícones dos indicadores no painel. Um pouco acima dos 16px do painel do GNOME porque muitos apps entregam o ícone via IconPixmap com margem transparente embutida.</description>
     </key>
 
     <key name="hide-overflow-when-empty" type="b">
       <default>true</default>
-      <summary>Ocultar o botao de overflow quando vazio</summary>
-      <description>Esconde o botao de overflow quando nao ha nenhum indicador oculto. Durante um arraste ele reaparece automaticamente.</description>
+      <summary>Ocultar o botão de overflow quando vazio</summary>
+      <description>Esconde o botão de overflow quando não há nenhum indicador oculto. Durante um arraste ele reaparece automaticamente.</description>
+    </key>
+
+    <key name="show-overflow-count" type="b">
+      <default>true</default>
+      <summary>Mostrar a contagem de indicadores ocultos</summary>
+      <description>Acrescenta um número discreto ao lado do botão de overflow quando há dois ou mais indicadores escondidos.</description>
+    </key>
+
+    <key name="hide-passive" type="b">
+      <default>true</default>
+      <summary>Ocultar automaticamente indicadores passivos</summary>
+      <description>Indicadores que se declaram com Status=Passive no protocolo StatusNotifierItem vão direto para o overflow. Voltam sozinhos ao painel quando mudam para Active ou NeedsAttention. Arrastar um deles para o painel fixa-o lá, ignorando esta opção.</description>
+    </key>
+
+    <key name="panel-box" type="s">
+      <choices>
+        <choice value="left"/>
+        <choice value="center"/>
+        <choice value="right"/>
+      </choices>
+      <default>'right'</default>
+      <summary>Área do painel</summary>
+      <description>Em qual das três caixas do painel do GNOME a bandeja vive: esquerda (ao lado de Atividades), centro (ao lado do relógio) ou direita (ao lado dos indicadores do sistema).</description>
+    </key>
+
+    <key name="panel-position" type="i">
+      <default>0</default>
+      <range min="0" max="20"/>
+      <summary>Posição dentro da área do painel</summary>
+      <description>Índice da bandeja entre os outros elementos da caixa escolhida. 0 é o primeiro. Valores maiores que a quantidade de elementos colocam a bandeja no fim.</description>
     </key>
 
     <key name="order" type="as">
       <default>[]</default>
       <summary>Ordem dos indicadores</summary>
-      <description>Lista de chaves estaveis de indicadores, na ordem em que devem ser exibidos.</description>
+      <description>Lista de chaves estáveis de indicadores, na ordem em que devem ser exibidos.</description>
     </key>
 
     <key name="hidden" type="as">
       <default>[]</default>
       <summary>Indicadores ocultos</summary>
-      <description>Lista de chaves estaveis de indicadores que ficam no popup de overflow.</description>
+      <description>Lista de chaves estáveis de indicadores que ficam no popup de overflow.</description>
+    </key>
+
+    <key name="pinned" type="as">
+      <default>[]</default>
+      <summary>Indicadores fixados no painel</summary>
+      <description>Chaves que o usuário arrastou explicitamente para o painel. Ficam imunes à opção de ocultar indicadores passivos.</description>
     </key>
 
   </schema>

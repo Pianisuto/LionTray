@@ -21,21 +21,44 @@ versões foi testada; declarar compatibilidade sem verificar só transfere o
 problema para o usuário. Para experimentar em outra versão, acrescente-a ao
 `shell-version` e reinstale.
 
-## O que a V1 faz
+## O que a extensão faz
 
 - Implementa `org.kde.StatusNotifierWatcher` e consome `StatusNotifierItem`.
 - Ícones via `IconName`, `IconThemePath` e `IconPixmap` (ARGB32), cobrindo
   apps GTK, Qt/KStatusNotifierItem, Electron/Chromium, Flatpak e
-  Ayatana/AppIndicator.
+  Ayatana/AppIndicator. Quando nada disso resolve, entra um ícone genérico
+  consistente — nunca o quadradinho de "imagem faltando".
 - Menus `com.canonical.dbusmenu` completos: submenus, separadores,
   checkbox/radio e ícones.
 - Clique primário (`Activate`), secundário (menu / `ContextMenu`), do meio
   (`SecondaryActivate`) e rolagem (`Scroll`).
-- Reordenação por arrastar direto no painel.
-- Arrastar para `▲` oculta; arrastar de volta do popup restaura.
-- Ordem e itens ocultos persistem em GSettings entre sessões.
+- Dica com o nome do aplicativo ao passar o mouse.
+- Reordenação por arrastar direto no painel, com o ícone visível o tempo
+  todo e os vizinhos deslizando para o novo lugar.
+- Arrastar para `▲` oculta; arrastar de volta do popup restaura. Segurar o
+  item sobre o `▲` por meio segundo abre o popup no meio do arraste.
+- Reorganização também pelo teclado (`Ctrl`+setas).
+- Indicadores `Passive` — registrados, mas sem nada a dizer — vão sozinhos
+  para o overflow e voltam quando ficam ativos.
+- `NeedsAttention` dá um pulso curto e depois fica só colorido; nada pisca
+  sem parar.
+- Ordem, itens ocultos e itens fixados persistem em GSettings entre sessões.
 - Indicadores novos aparecem sozinhos; apps fechados somem sem perder a
   posição salva (voltam para onde estavam).
+- Aparência herdada do tema do Shell em uso, claro ou escuro.
+
+### Integração com o tema
+
+Os botões da bandeja carregam também a classe `panel-button` do próprio
+Shell. Hover, `active` e foco saem exatamente iguais aos dos outros botões
+do painel — no Adwaita claro, no escuro e em temas de terceiros como os do
+Zorin, que redefinem `#panel .panel-button` com a mesma técnica de
+preenchimento (`box-shadow: inset 0 0 0 100px`). O `stylesheet.css` da
+extensão mexe só em padding, raio e borda.
+
+O popup de overflow não vive dentro de `#panel` e por isso não alcança
+essas regras; para ele, e só para ele, o JS aplica `liontray-light` ou
+`liontray-dark` conforme `Main.getStyleVariant()`.
 
 ## Instalação local
 
@@ -66,9 +89,17 @@ gnome-extensions disable zorin-appindicator@zorinos.com
 ```
 
 Se algum outro processo estiver com o nome, o LionTray detecta, registra no
-log quem é o dono (com PID e nome do processo) e mostra uma notificação
-*"Outro AppIndicator está ativo"* depois de alguns segundos — em vez de
+log quem é o dono (com PID e nome do processo) e, depois de alguns segundos,
+mostra uma notificação *"Outro AppIndicator está ativo"* — em vez de
 simplesmente exibir uma bandeja vazia sem explicação.
+
+A notificação passa uma vez; enquanto o conflito durar fica também um ⚠ no
+painel, e clicar nele mostra o motivo e um atalho para as preferências. A
+seção **Sobre** das preferências informa quem está com o nome agora.
+
+A espera de alguns segundos é proposital: na inicialização da sessão a
+disputa pelo nome costuma se resolver sozinha, e avisar de imediato geraria
+alarme falso.
 
 ### Ativar o LionTray
 
@@ -181,11 +212,31 @@ busctl --user get-property org.kde.StatusNotifierWatcher /StatusNotifierWatcher 
 - **Ocultar**: arraste o ícone para cima do botão `▲`.
 - **Ver ocultos**: clique no `▲`.
 - **Restaurar**: com o popup aberto, arraste o ícone de volta para a barra.
+- **Reordenar dentro do popup**: arraste normalmente entre os ícones
+  ocultos; o popup continua aberto durante o arraste.
+- **Chegar ao popup no meio de um arraste**: segure o item sobre o `▲` por
+  meio segundo e ele abre sozinho, para você soltar na posição exata.
 - **Interagir**: clique esquerdo ativa, direito abre o menu, meio dispara a
   ação secundária, rolagem envia `Scroll`.
+- **Descobrir de quem é o ícone**: passe o mouse e espere ~0,6 s.
+- **Preferências**: clique com o botão direito no `▲`.
 
 O botão `▲` fica escondido quando não há nada oculto (configurável) e
-reaparece sozinho enquanto você arrasta.
+reaparece sozinho enquanto você arrasta. Com dois ou mais itens escondidos
+ele mostra a contagem: `▲ 3`.
+
+### Teclado
+
+Chegue à bandeja com `Ctrl`+`Alt`+`Tab` (navegação entre áreas do painel) e
+depois `Tab` / setas entre os ícones.
+
+| Tecla | Ação |
+| --- | --- |
+| `Enter` / `Espaço` | Ativa o indicador |
+| `Menu` ou `Shift`+`F10` | Abre o menu de contexto |
+| `Ctrl`+`←` / `Ctrl`+`→` | Move o indicador uma casa |
+| `Ctrl`+`↓` | Manda para o overflow |
+| `Ctrl`+`↑` | Traz de volta para o painel |
 
 ## Preferências
 
@@ -193,11 +244,17 @@ reaparece sozinho enquanto você arrasta.
 gnome-extensions prefs liontray@lionflow.dev
 ```
 
+Ou clique com o botão direito no `▲`.
+
 Só o essencial:
 
-- tamanho dos ícones (12–32 px, padrão 18);
-- exibir ou não o botão de overflow quando ele está vazio;
-- resetar organização.
+- **Aparência**: tamanho dos ícones (12–32 px, padrão 18), área do painel
+  (esquerda / centro / direita) e posição dentro dela;
+- **Comportamento**: exibir ou não o `▲` quando vazio, mostrar a contagem de
+  ocultos, ocultar indicadores passivos;
+- **Organização**: resetar (com confirmação, porque não dá para desfazer);
+- **Sobre**: versão, GNOME Shell detectado, quem está com a bandeja do
+  sistema e o link do repositório.
 
 A organização cotidiana é feita arrastando, não aqui.
 
@@ -219,6 +276,38 @@ arraste:
 gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@lionflow.dev/schemas set org.gnome.shell.extensions.liontray hide-overflow-when-empty false
 ```
 
+Para ver todo indicador registrado, inclusive os passivos:
+
+```bash
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@lionflow.dev/schemas set org.gnome.shell.extensions.liontray hide-passive false
+```
+
+Para mover a bandeja para o centro do painel, ao lado do relógio:
+
+```bash
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@lionflow.dev/schemas set org.gnome.shell.extensions.liontray panel-box center
+```
+
+`panel-box` aceita `left`, `center` e `right`; `panel-position` é o índice
+entre os outros elementos daquela caixa. A ordem dos indicadores entre si
+continua sendo assunto do arrastar.
+
+### Ocultação automática de indicadores passivos
+
+`Passive` é um dos três estados do protocolo StatusNotifierItem — quer dizer
+"estou registrado, mas não tenho nada a dizer agora". É o caso do
+`update-notifier` do Zorin, que fica no barramento o tempo todo e só
+interessa quando há atualização.
+
+Com `hide-passive` ligado (o padrão) esses indicadores vão direto para o
+overflow e voltam sozinhos ao painel quando mudam para `Active` ou
+`NeedsAttention`. A lista de ocultos escolhida por você não é tocada: a
+regra é aplicada por cima, e some se você desligar a opção.
+
+Arrastar um indicador passivo do overflow para o painel fixa ele lá
+(`pinned` no GSettings), ignorando a regra daí em diante. Reordenar um
+indicador ativo não fixa nada — só contrariar a regra explicitamente fixa.
+
 ## Estrutura
 
 ```
@@ -234,6 +323,8 @@ liontray@lionflow.dev/
     ├── statusNotifierItem.js    um indicador: propriedades, sinais, métodos
     ├── iconResolver.js          IconName / IconThemePath / IconPixmap → GIcon
     ├── dbusMenu.js              cliente com.canonical.dbusmenu → PopupMenu
+    ├── theming.js               variante clara/escura do Shell → classe CSS
+    ├── tooltip.js               dica com o nome do app ao passar o mouse
     ├── indicatorButton.js       ator de um indicador (clique, scroll, drag)
     └── tray.js                  tray visível, overflow, DnD e persistência
 ```
@@ -254,7 +345,8 @@ sessão: posse do nome `org.kde.StatusNotifierWatcher`, registro e remoção de
 itens, leitura de propriedades, conversão de `IconPixmap` ARGB32 para PNG,
 resolução por `IconName`, `Activate`/`SecondaryActivate`/`Scroll`, o sinal
 `NewIcon`, o parsing do layout DBusMenu (separadores, submenus, checkmarks,
-ícones) e a detecção de conflito de watcher. A metade de UI (`tray.js`,
+ícones), o sinalizador de ícone quebrado e a detecção de conflito de
+watcher. A metade de UI (`tray.js`,
 `indicatorButton.js`) só roda dentro do GNOME Shell e é validada à mão.
 
 ### Identidade persistida
