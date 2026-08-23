@@ -157,7 +157,7 @@ class LionTrayIndicatorButton extends St.Button {
         this._menu.actor.add_style_class_name('liontray-indicator-menu');
         Main.layoutManager.uiGroup.add_child(this._menu.actor);
         this._menu.actor.hide();
-        Main.panel.menuManager.addMenu(this._menu);
+        this._tray.menuManager.addMenu(this._menu);
 
         this._menuClient = new DBusMenuClient(
             this.sni.busName, this.sni.menuPath, this._menu);
@@ -182,7 +182,7 @@ class LionTrayIndicatorButton extends St.Button {
             const menu = this._menu;
             this._menu = null;
             try {
-                Main.panel.menuManager.removeMenu(menu);
+                this._tray.menuManager.removeMenu(menu);
                 menu.destroy();
             } catch (e) {
                 console.warn(`[LionTray] falha ao destruir menu: ${e}`);
@@ -200,6 +200,9 @@ class LionTrayIndicatorButton extends St.Button {
         // menu precisa se ancorar no botao de overflow, que esta no painel.
         menu.sourceActor = this._tray.anchorFor(this);
         this._tray.closeOverflow();
+        // gerenciadores diferentes nao se falam: fecha na mao o menu do
+        // painel para nao empilhar dois modais
+        Main.panel.menuManager.activeMenu?.close();
         menu.open(true);
         return true;
     }

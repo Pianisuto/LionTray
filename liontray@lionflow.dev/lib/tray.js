@@ -24,6 +24,25 @@ import {makeStableKey, warn} from './util.js';
 
 const MAX_REMEMBERED_KEYS = 200;
 
+/**
+ * Gerenciador de menus proprio da bandeja.
+ *
+ * O PopupMenuManager do Shell troca de menu assim que o ponteiro entra no
+ * sourceActor de outro menu que ele gerencia (popupMenu.js,
+ * _onCapturedEvent -> _changeMenu). Entre os botoes do painel isso e util,
+ * mas numa bandeja significa que, com qualquer menu aberto, passar o mouse
+ * sobre os icones abre o menu de cada app do caminho - inclusive quando o
+ * usuario so esta indo pegar um icone para arrastar.
+ *
+ * Aqui a troca por hover e por foco fica desligada: menu de indicador so
+ * abre por clique. Ficar fora do Main.panel.menuManager tambem impede que
+ * um menu do proprio GNOME (Quick Settings, calendario) puxe os nossos.
+ */
+class TrayMenuManager extends PopupMenu.PopupMenuManager {
+    _changeMenu() {
+    }
+}
+
 export class LionTray {
     constructor(settings) {
         this._settings = settings;
@@ -38,6 +57,8 @@ export class LionTray {
 
         this._order = settings.get_strv('order');
         this._hidden = new Set(settings.get_strv('hidden'));
+
+        this.menuManager = new TrayMenuManager(this);
 
         this._buildUI();
 
@@ -138,7 +159,7 @@ export class LionTray {
 
         Main.layoutManager.uiGroup.add_child(this._overflowMenu.actor);
         this._overflowMenu.actor.hide();
-        Main.panel.menuManager.addMenu(this._overflowMenu);
+        this.menuManager.addMenu(this._overflowMenu);
     }
 
     closeOverflow() {
@@ -150,14 +171,13 @@ export class LionTray {
     }
 
     /**
-     * Fecha o overflow, os menus dos indicadores e qualquer outro menu do
-     * painel que ainda detenha o grab.
+     * Fecha o overflow, os menus dos indicadores e o menu do painel que
+     * porventura esteja aberto.
      *
-     * Enquanto um menu do Main.panel.menuManager esta aberto ele segura o
-     * grab modal, e todo evento ENTER passa pelo manager. Ao sobrevoar o
-     * sourceActor de outro menu gerenciado, ele troca de menu sozinho
-     * (popupMenu.js, _onCapturedEvent). Arrastando um icone por cima dos
-     * outros isso abre o menu de cada um no caminho.
+     * Um menu aberto detem o grab modal, e isso atrapalha o arraste de
+     * duas formas: o ponteiro nao chega nos botoes da bandeja e o
+     * PopupMenuManager reage aos ENTER que passam por ele. Comecar um
+     * arraste com a bandeja limpa evita as duas.
      */
     closeAllMenus() {
         this.closeOverflow();
@@ -510,7 +530,7 @@ export class LionTray {
         this._dropIndicator = null;
 
         if (this._overflowMenu) {
-            Main.panel.menuManager.removeMenu(this._overflowMenu);
+            this.menuManager.removeMenu(this._overflowMenu);
             this._overflowMenu.destroy();
             this._overflowMenu = null;
         }
