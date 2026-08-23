@@ -1,0 +1,62 @@
+/* LionTray - SPDX-License-Identifier: GPL-3.0-or-later */
+
+.liontray-container {
+    spacing: 0;
+}
+
+.liontray-box {
+    spacing: 0;
+    min-width: 16px;
+}
+
+.liontray-item {
+    padding: 0 4px;
+    border-radius: 6px;
+    transition-duration: 100ms;
+}
+
+.liontray-item:hover,
+.liontray-item:focus {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.liontray-item:active,
+.liontray-item:checked {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.liontray-icon {
+    icon-size: 16px;
+}
+
+.liontray-attention .liontray-icon {
+    color: #f57900;
+}
+
+.liontray-overflow-button {
+    padding: 0 2px;
+}
+
+/* Marcador de insercao mostrado durante o arraste */
+.liontray-drop-indicator {
+    background-color: rgba(120, 180, 255, 0.9);
+    border-radius: 2px;
+    margin: 4px 1px;
+}
+
+/* Popup de overflow */
+.liontray-overflow-item {
+    padding: 4px 6px;
+}
+
+.liontray-overflow-box {
+    spacing: 2px;
+    min-height: 28px;
+    min-width: 120px;
+}
+
+.liontray-overflow-empty {
+    padding: 0 6px;
+    font-size: 0.9em;
+    color: rgba(255, 255, 255, 0.6);
+}

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.liontray"
+          path="/org/gnome/shell/extensions/liontray/">
+
+    <key name="icon-size" type="i">
+      <default>16</default>
+      <range min="12" max="32"/>
+      <summary>Tamanho dos icones</summary>
+      <description>Tamanho, em pixels, dos icones dos indicadores no painel.</description>
+    </key>
+
+    <key name="hide-overflow-when-empty" type="b">
+      <default>true</default>
+      <summary>Ocultar o botao de overflow quando vazio</summary>
+      <description>Esconde o botao de overflow quando nao ha nenhum indicador oculto. Durante um arraste ele reaparece automaticamente.</description>
+    </key>
+
+    <key name="order" type="as">
+      <default>[]</default>
+      <summary>Ordem dos indicadores</summary>
+      <description>Lista de chaves estaveis de indicadores, na ordem em que devem ser exibidos.</description>
+    </key>
+
+    <key name="hidden" type="as">
+      <default>[]</default>
+      <summary>Indicadores ocultos</summary>
+      <description>Lista de chaves estaveis de indicadores que ficam no popup de overflow.</description>
+    </key>
+
+  </schema>
+</schemalist>
