@@ -4,10 +4,10 @@
           path="/org/gnome/shell/extensions/liontray/">
 
     <key name="icon-size" type="i">
-      <default>16</default>
+      <default>18</default>
       <range min="12" max="32"/>
       <summary>Tamanho dos icones</summary>
-      <description>Tamanho, em pixels, dos icones dos indicadores no painel.</description>
+      <description>Tamanho, em pixels, dos icones dos indicadores no painel. Um pouco acima dos 16px do painel do GNOME porque muitos apps entregam o icone via IconPixmap com margem transparente embutida.</description>
     </key>
 
     <key name="hide-overflow-when-empty" type="b">

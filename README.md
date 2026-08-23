@@ -174,11 +174,29 @@ gnome-extensions prefs liontray@lionflow.dev
 
 Só o essencial:
 
-- tamanho dos ícones (12–32 px);
+- tamanho dos ícones (12–32 px, padrão 18);
 - exibir ou não o botão de overflow quando ele está vazio;
 - resetar organização.
 
 A organização cotidiana é feita arrastando, não aqui.
+
+O tamanho reage ao vivo, sem reiniciar o Shell — dá para calibrar direto:
+
+```bash
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@lionflow.dev/schemas set org.gnome.shell.extensions.liontray icon-size 20
+```
+
+O padrão é 18 e não 16 (o valor que o próprio GNOME usa no painel) porque
+muitos apps entregam o ícone via `IconPixmap` com margem transparente
+embutida: o bitmap tem 22 px mas o desenho ocupa só o miolo, então a 16 px o
+glifo sai visivelmente menor que os ícones nativos do painel.
+
+Para deixar o botão de overflow sempre visível, em vez de só durante um
+arraste:
+
+```bash
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@lionflow.dev/schemas set org.gnome.shell.extensions.liontray hide-overflow-when-empty false
+```
 
 ## Estrutura
 
