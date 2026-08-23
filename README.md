@@ -1,337 +1,257 @@
 # LionTray
 
-Extensão do GNOME Shell que substitui a bandeja de sistema
-(`StatusNotifierItem` / AppIndicator) por uma interface simples e direta,
-inspirada no comportamento do Windows: os ícones ficam no painel, você os
-reordena arrastando e joga os que não usa em um botão de overflow.
+Extensão do GNOME Shell para substituir a bandeja de sistema
+(`StatusNotifierItem` / AppIndicator) por uma interface simples, organizada e
+mais próxima do comportamento do Windows: os indicadores ficam no painel,
+podem ser reordenados por arrastar e os menos usados podem ir para um botão
+de overflow.
 
-```
+```text
 [Bitwarden] [Flameshot] [Dropbox] [▲]
         arrasta Dropbox para ▲
-[Bitwarden] [Flameshot] [▲]        Dropbox agora vive dentro do popup
+[Bitwarden] [Flameshot] [▲]        Dropbox agora vive no overflow
 ```
 
-- UUID: `liontray@lionflow.dev`
+- UUID: `liontray@pianisuto.dev`
+- Repositório: `Pianisuto/LionTray`
 - Testado em: Zorin OS, GNOME Shell 46, Xorg, GJS 1.80
 - Licença: GPL-3.0-or-later
 
-O `metadata.json` declara `shell-version: ["46"]` de propósito. O código não
-usa nada específico de 46 e provavelmente roda em 45–48, mas nenhuma dessas
-versões foi testada; declarar compatibilidade sem verificar só transfere o
-problema para o usuário. Para experimentar em outra versão, acrescente-a ao
-`shell-version` e reinstale.
+O `metadata.json` declara apenas GNOME Shell 46 de propósito. Outras versões
+só devem ser adicionadas a `shell-version` depois de teste real.
 
-## O que a extensão faz
+## Recursos
 
 - Implementa `org.kde.StatusNotifierWatcher` e consome `StatusNotifierItem`.
-- Ícones via `IconName`, `IconThemePath` e `IconPixmap` (ARGB32), cobrindo
-  apps GTK, Qt/KStatusNotifierItem, Electron/Chromium, Flatpak e
-  Ayatana/AppIndicator. Quando nada disso resolve, entra um ícone genérico
-  consistente — nunca o quadradinho de "imagem faltando".
-- Menus `com.canonical.dbusmenu` completos: submenus, separadores,
-  checkbox/radio e ícones.
-- Clique primário (`Activate`), secundário (menu / `ContextMenu`), do meio
-  (`SecondaryActivate`) e rolagem (`Scroll`).
-- Dica com o nome do aplicativo ao passar o mouse.
-- Reordenação por arrastar direto no painel, com o ícone visível o tempo
-  todo e os vizinhos deslizando para o novo lugar.
-- Arrastar para `▲` oculta; arrastar de volta do popup restaura. Segurar o
-  item sobre o `▲` por meio segundo abre o popup no meio do arraste.
-- Reorganização também pelo teclado (`Ctrl`+setas).
-- Indicadores `Passive` — registrados, mas sem nada a dizer — vão sozinhos
-  para o overflow e voltam quando ficam ativos.
-- `NeedsAttention` dá um pulso curto e depois fica só colorido; nada pisca
-  sem parar.
-- Ordem, itens ocultos e itens fixados persistem em GSettings entre sessões.
-- Indicadores novos aparecem sozinhos; apps fechados somem sem perder a
-  posição salva (voltam para onde estavam).
-- Aparência herdada do tema do Shell em uso, claro ou escuro.
-
-### Integração com o tema
-
-Os botões da bandeja carregam também a classe `panel-button` do próprio
-Shell. Hover, `active` e foco saem exatamente iguais aos dos outros botões
-do painel — no Adwaita claro, no escuro e em temas de terceiros como os do
-Zorin, que redefinem `#panel .panel-button` com a mesma técnica de
-preenchimento (`box-shadow: inset 0 0 0 100px`). O `stylesheet.css` da
-extensão mexe só em padding, raio e borda.
-
-O popup de overflow não vive dentro de `#panel` e por isso não alcança
-essas regras; para ele, e só para ele, o JS aplica `liontray-light` ou
-`liontray-dark` conforme `Main.getStyleVariant()`.
+- Suporta `IconName`, `IconThemePath` e `IconPixmap`, incluindo apps GTK,
+  Qt/KStatusNotifierItem, Electron/Chromium, Flatpak e Ayatana/AppIndicator.
+- Fallback consistente para ícone quebrado, sem o quadradinho de imagem
+  ausente do Shell.
+- Menus `com.canonical.dbusmenu` com submenus, separadores, checkbox/radio e
+  ícones.
+- Clique primário, secundário, do meio e rolagem.
+- Tooltip com o nome do aplicativo.
+- Reordenação por drag-and-drop direto no painel e dentro do overflow.
+- Arrastar para `▲` oculta; arrastar do popup para o painel restaura.
+- Segurar um item sobre `▲` abre o overflow durante o arraste.
+- Organização também pelo teclado (`Ctrl` + setas).
+- Indicadores `Passive` podem ser enviados automaticamente ao overflow.
+- `NeedsAttention` recebe um pulso curto, sem piscar continuamente.
+- Ordem, itens ocultos e itens fixados persistem via GSettings.
+- Aparência integrada ao tema do GNOME/Zorin.
+- Opção para **dessaturar os ícones**, exibindo os aplicativos em tons de
+  cinza sem alterar os arquivos originais.
 
 ## Instalação local
 
 ```bash
-git clone <url-do-repositorio> LionTray
+git clone https://github.com/Pianisuto/LionTray.git
+cd LionTray
+make install
 ```
 
-```bash
-cd LionTray && make install
-```
-
-Ou, sem `make`:
+Ou:
 
 ```bash
 ./scripts/install.sh
 ```
 
-Isso compila o schema GSettings e copia tudo para
-`~/.local/share/gnome-shell/extensions/liontray@lionflow.dev/`.
+Isso instala a extensão em:
 
-### Desativar o AppIndicator do Zorin
+```text
+~/.local/share/gnome-shell/extensions/liontray@pianisuto.dev/
+```
 
-LionTray precisa ser dono do nome `org.kde.StatusNotifierWatcher`. Desative
-qualquer outra extensão que faça o mesmo:
+### Se você usou o UUID antigo
+
+Versões de desenvolvimento anteriores usavam `liontray@lionflow.dev`. Como o
+UUID identifica a extensão para o GNOME, remova a instalação antiga uma vez:
+
+```bash
+gnome-extensions disable liontray@lionflow.dev 2>/dev/null || true
+rm -rf ~/.local/share/gnome-shell/extensions/liontray@lionflow.dev
+```
+
+Depois instale e habilite o UUID atual:
+
+```bash
+make install
+gnome-extensions enable liontray@pianisuto.dev
+```
+
+O schema GSettings continua com o mesmo caminho, então as preferências e a
+organização salvas continuam compatíveis.
+
+### Conflito com outro AppIndicator
+
+O LionTray precisa ser dono de `org.kde.StatusNotifierWatcher`. No Zorin,
+desative a extensão que normalmente assume essa função:
 
 ```bash
 gnome-extensions disable zorin-appindicator@zorinos.com
 ```
 
-Se algum outro processo estiver com o nome, o LionTray detecta, registra no
-log quem é o dono (com PID e nome do processo) e, depois de alguns segundos,
-mostra uma notificação *"Outro AppIndicator está ativo"* — em vez de
-simplesmente exibir uma bandeja vazia sem explicação.
+Se outro processo continuar com o nome, o LionTray detecta o conflito,
+registra o responsável no log e mostra um aviso no painel.
 
-A notificação passa uma vez; enquanto o conflito durar fica também um ⚠ no
-painel, e clicar nele mostra o motivo e um atalho para as preferências. A
-seção **Sobre** das preferências informa quem está com o nome agora.
+### Reiniciar o Shell
 
-A espera de alguns segundos é proposital: na inicialização da sessão a
-disputa pelo nome costuma se resolver sozinha, e avisar de imediato geraria
-alarme falso.
+No Xorg, use `Alt+F2`, digite `r` e pressione Enter.
 
-### Ativar o LionTray
-
-```bash
-gnome-extensions enable liontray@lionflow.dev
-```
-
-### Reiniciar o GNOME Shell
-
-No Xorg:
+Também é possível:
 
 ```bash
 busctl --user call org.gnome.Shell /org/gnome/Shell org.gnome.Shell Eval s 'Meta.restart("Reiniciando...")'
 ```
 
-Ou, mais simples: `Alt+F2`, digite `r`, `Enter`.
+No Wayland, faça logout/login.
 
-No Wayland não há restart do Shell — faça logout e login.
+## Uso
 
-## Comandos do dia a dia
+- **Reordenar:** arraste um ícone horizontalmente.
+- **Ocultar:** arraste o ícone para `▲`.
+- **Ver ocultos:** clique em `▲`.
+- **Restaurar:** arraste um ícone do popup para o painel.
+- **Reordenar ocultos:** arraste dentro do próprio popup.
+- **Identificar um ícone:** mantenha o ponteiro sobre ele por ~0,6 s.
+- **Preferências:** botão direito em `▲`.
+
+Com dois ou mais itens ocultos, o botão pode mostrar a contagem (`▲ 3`).
+
+### Teclado
+
+| Tecla | Ação |
+| --- | --- |
+| `Enter` / `Espaço` | Ativa o indicador |
+| `Menu` ou `Shift`+`F10` | Abre o menu de contexto |
+| `Ctrl`+`←` / `Ctrl`+`→` | Move o indicador uma posição |
+| `Ctrl`+`↓` | Move para o overflow |
+| `Ctrl`+`↑` | Traz de volta ao painel |
+
+## Preferências
+
+```bash
+gnome-extensions prefs liontray@pianisuto.dev
+```
+
+A tela de preferências mantém apenas opções que não fazem sentido como gesto:
+
+- **Aparência:** tamanho dos ícones, dessaturação, área do painel e posição;
+- **Comportamento:** visibilidade do overflow, contagem e tratamento de
+  indicadores passivos;
+- **Organização:** reset da ordem/ocultos/fixados com confirmação;
+- **Sobre:** versão, GNOME Shell detectado, proprietário atual do watcher e
+  link do repositório.
+
+A opção **Dessaturar os ícones** usa `Clutter.DesaturateEffect` diretamente no
+ator do ícone. Isso funciona igualmente para PNG, SVG, `IconPixmap` e ícones
+de tema e não modifica os arquivos entregues pelos aplicativos.
+
+Também pode ser alterada pela linha de comando:
+
+```bash
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.dev/schemas \
+  set org.gnome.shell.extensions.liontray desaturate-icons true
+```
+
+Outros exemplos:
+
+```bash
+# tamanho
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.dev/schemas \
+  set org.gnome.shell.extensions.liontray icon-size 20
+
+# mostrar indicadores Passive no painel
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.dev/schemas \
+  set org.gnome.shell.extensions.liontray hide-passive false
+
+# mover a bandeja para o centro
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.dev/schemas \
+  set org.gnome.shell.extensions.liontray panel-box center
+```
+
+## Desenvolvimento
 
 | Ação | Comando |
 | --- | --- |
 | Instalar / reinstalar | `make install` |
 | Habilitar | `make enable` |
 | Desabilitar | `make disable` |
-| Reinstalar e recarregar CSS | `make reload` |
-| Ver logs ao vivo | `make logs` |
-| Compilar só o schema | `make schemas` |
-| Checar sintaxe dos módulos | `make check` |
-| Rodar os testes do backend | `make test` |
-| Remover a instalação | `make uninstall` |
-| Gerar o zip de distribuição | `make pack` |
+| Reinstalar e reativar | `make reload` |
+| Ver logs | `make logs` |
+| Compilar schema | `make schemas` |
+| Checar sintaxe | `make check` |
+| Rodar testes | `make test` |
+| Remover instalação | `make uninstall` |
+| Gerar pacote | `make pack` |
 
-Atenção ao ciclo de desenvolvimento: **`make reload` só recarrega o
-`stylesheet.css`**. O Shell chama `_loadExtensionStylesheet()` a cada
-`enable`, mas o módulo JS fica em cache — `_callExtensionInit()` só
-reimporta quando o estado é `INITIALIZED`, e depois de um `disable` ele é
-`INACTIVE`. Ou seja:
-
-- mudou `.css` → `make reload` basta;
-- mudou `.js` → `make install` e reinicie o Shell (`Alt+F2`, `r`, `Enter`);
-- mudou só uma chave GSettings → aplica ao vivo, sem nada.
-
-Equivalentes diretos, sem `make`:
-
-```bash
-gnome-extensions enable liontray@lionflow.dev
-```
-
-```bash
-gnome-extensions disable liontray@lionflow.dev
-```
-
-```bash
-gnome-extensions info liontray@lionflow.dev
-```
-
-```bash
-gnome-extensions prefs liontray@lionflow.dev
-```
+Mudou `.js`: reinstale e reinicie o Shell. Mudou apenas CSS: `make reload`
+normalmente basta. Chaves GSettings reagem ao vivo quando suportado.
 
 ### Logs
-
-Tudo que a extensão registra sai com o prefixo `[LionTray]`.
-
-```bash
-journalctl -f -o cat /usr/bin/gnome-shell
-```
-
-Apenas as mensagens da extensão:
 
 ```bash
 journalctl -f -o cat /usr/bin/gnome-shell | grep -i liontray
 ```
 
-Erros desde o último boot:
+### Estado salvo
 
 ```bash
-journalctl -b -o cat /usr/bin/gnome-shell | grep -iE 'liontray|stack trace'
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@pianisuto.dev/schemas \
+  list-recursively org.gnome.shell.extensions.liontray
 ```
 
-Para depurar `prefs.js` (roda em outro processo):
+## Empacotamento e distribuição
+
+Para gerar o ZIP destinado ao extensions.gnome.org:
 
 ```bash
-journalctl -f -o cat /usr/bin/gjs
+make check
+make test
+make pack
 ```
 
-### Inspecionar o estado salvo
+O arquivo gerado é:
+
+```text
+liontray@pianisuto.dev.zip
+```
+
+O `Makefile` mantém `metadata.json` na raiz do ZIP e exclui
+`schemas/gschemas.compiled`, deixando no pacote apenas o XML do schema para o
+GNOME compilar no ambiente correto.
+
+O mesmo ZIP pode ser anexado a uma GitHub Release para instalação manual:
 
 ```bash
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@lionflow.dev/schemas list-recursively org.gnome.shell.extensions.liontray
+gnome-extensions install --force liontray@pianisuto.dev.zip
+gnome-extensions enable liontray@pianisuto.dev
 ```
-
-Resetar a organização pela linha de comando:
-
-```bash
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@lionflow.dev/schemas reset-recursively org.gnome.shell.extensions.liontray
-```
-
-### Verificar quem é dono do watcher
-
-```bash
-busctl --user get-property org.kde.StatusNotifierWatcher /StatusNotifierWatcher org.kde.StatusNotifierWatcher RegisteredStatusNotifierItems
-```
-
-## Uso
-
-- **Reordenar**: arraste um ícone horizontalmente na barra.
-- **Ocultar**: arraste o ícone para cima do botão `▲`.
-- **Ver ocultos**: clique no `▲`.
-- **Restaurar**: com o popup aberto, arraste o ícone de volta para a barra.
-- **Reordenar dentro do popup**: arraste normalmente entre os ícones
-  ocultos; o popup continua aberto durante o arraste.
-- **Chegar ao popup no meio de um arraste**: segure o item sobre o `▲` por
-  meio segundo e ele abre sozinho, para você soltar na posição exata.
-- **Interagir**: clique esquerdo ativa, direito abre o menu, meio dispara a
-  ação secundária, rolagem envia `Scroll`.
-- **Descobrir de quem é o ícone**: passe o mouse e espere ~0,6 s.
-- **Preferências**: clique com o botão direito no `▲`.
-
-O botão `▲` fica escondido quando não há nada oculto (configurável) e
-reaparece sozinho enquanto você arrasta. Com dois ou mais itens escondidos
-ele mostra a contagem: `▲ 3`.
-
-### Teclado
-
-Chegue à bandeja com `Ctrl`+`Alt`+`Tab` (navegação entre áreas do painel) e
-depois `Tab` / setas entre os ícones.
-
-| Tecla | Ação |
-| --- | --- |
-| `Enter` / `Espaço` | Ativa o indicador |
-| `Menu` ou `Shift`+`F10` | Abre o menu de contexto |
-| `Ctrl`+`←` / `Ctrl`+`→` | Move o indicador uma casa |
-| `Ctrl`+`↓` | Manda para o overflow |
-| `Ctrl`+`↑` | Traz de volta para o painel |
-
-## Preferências
-
-```bash
-gnome-extensions prefs liontray@lionflow.dev
-```
-
-Ou clique com o botão direito no `▲`.
-
-Só o essencial:
-
-- **Aparência**: tamanho dos ícones (12–32 px, padrão 18), área do painel
-  (esquerda / centro / direita) e posição dentro dela;
-- **Comportamento**: exibir ou não o `▲` quando vazio, mostrar a contagem de
-  ocultos, ocultar indicadores passivos;
-- **Organização**: resetar (com confirmação, porque não dá para desfazer);
-- **Sobre**: versão, GNOME Shell detectado, quem está com a bandeja do
-  sistema e o link do repositório.
-
-A organização cotidiana é feita arrastando, não aqui.
-
-O tamanho reage ao vivo, sem reiniciar o Shell — dá para calibrar direto:
-
-```bash
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@lionflow.dev/schemas set org.gnome.shell.extensions.liontray icon-size 20
-```
-
-O padrão é 18 e não 16 (o valor que o próprio GNOME usa no painel) porque
-muitos apps entregam o ícone via `IconPixmap` com margem transparente
-embutida: o bitmap tem 22 px mas o desenho ocupa só o miolo, então a 16 px o
-glifo sai visivelmente menor que os ícones nativos do painel.
-
-Para deixar o botão de overflow sempre visível, em vez de só durante um
-arraste:
-
-```bash
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@lionflow.dev/schemas set org.gnome.shell.extensions.liontray hide-overflow-when-empty false
-```
-
-Para ver todo indicador registrado, inclusive os passivos:
-
-```bash
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@lionflow.dev/schemas set org.gnome.shell.extensions.liontray hide-passive false
-```
-
-Para mover a bandeja para o centro do painel, ao lado do relógio:
-
-```bash
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/liontray@lionflow.dev/schemas set org.gnome.shell.extensions.liontray panel-box center
-```
-
-`panel-box` aceita `left`, `center` e `right`; `panel-position` é o índice
-entre os outros elementos daquela caixa. A ordem dos indicadores entre si
-continua sendo assunto do arrastar.
-
-### Ocultação automática de indicadores passivos
-
-`Passive` é um dos três estados do protocolo StatusNotifierItem — quer dizer
-"estou registrado, mas não tenho nada a dizer agora". É o caso do
-`update-notifier` do Zorin, que fica no barramento o tempo todo e só
-interessa quando há atualização.
-
-Com `hide-passive` ligado (o padrão) esses indicadores vão direto para o
-overflow e voltam sozinhos ao painel quando mudam para `Active` ou
-`NeedsAttention`. A lista de ocultos escolhida por você não é tocada: a
-regra é aplicada por cima, e some se você desligar a opção.
-
-Arrastar um indicador passivo do overflow para o painel fixa ele lá
-(`pinned` no GSettings), ignorando a regra daí em diante. Reordenar um
-indicador ativo não fixa nada — só contrariar a regra explicitamente fixa.
 
 ## Estrutura
 
-```
-liontray@lionflow.dev/
-├── extension.js                 bootstrap: liga backend e UI, desfaz tudo em disable()
-├── prefs.js                     preferências mínimas (Adw)
+```text
+liontray@pianisuto.dev/
+├── extension.js
+├── prefs.js
 ├── stylesheet.css
 ├── schemas/
 │   └── org.gnome.shell.extensions.liontray.gschema.xml
 └── lib/
-    ├── util.js                  helpers D-Bus e chave estável de identidade
-    ├── watcher.js               org.kde.StatusNotifierWatcher (protocolo)
-    ├── statusNotifierItem.js    um indicador: propriedades, sinais, métodos
-    ├── iconResolver.js          IconName / IconThemePath / IconPixmap → GIcon
-    ├── dbusMenu.js              cliente com.canonical.dbusmenu → PopupMenu
-    ├── theming.js               variante clara/escura do Shell → classe CSS
-    ├── tooltip.js               dica com o nome do app ao passar o mouse
-    ├── indicatorButton.js       ator de um indicador (clique, scroll, drag)
-    └── tray.js                  tray visível, overflow, DnD e persistência
+    ├── util.js
+    ├── watcher.js
+    ├── statusNotifierItem.js
+    ├── iconResolver.js
+    ├── dbusMenu.js
+    ├── theming.js
+    ├── tooltip.js
+    ├── indicatorButton.js
+    └── tray.js
 ```
 
-A separação é intencional: `watcher.js`, `statusNotifierItem.js` e
-`dbusMenu.js` não conhecem St/Clutter; `tray.js` e `indicatorButton.js` não
-falam D-Bus diretamente.
+`watcher.js`, `statusNotifierItem.js` e `dbusMenu.js` cuidam do protocolo;
+`tray.js` e `indicatorButton.js` cuidam da UI; `iconResolver.js` concentra a
+resolução de ícones.
 
 ## Testes
 
@@ -339,28 +259,10 @@ falam D-Bus diretamente.
 make test
 ```
 
-Sobe um barramento D-Bus isolado (`dbus-run-session`), registra um
-`StatusNotifierItem` falso e exercita o backend inteiro sem tocar na sua
-sessão: posse do nome `org.kde.StatusNotifierWatcher`, registro e remoção de
-itens, leitura de propriedades, conversão de `IconPixmap` ARGB32 para PNG,
-resolução por `IconName`, `Activate`/`SecondaryActivate`/`Scroll`, o sinal
-`NewIcon`, o parsing do layout DBusMenu (separadores, submenus, checkmarks,
-ícones), o sinalizador de ícone quebrado e a detecção de conflito de
-watcher. A metade de UI (`tray.js`,
-`indicatorButton.js`) só roda dentro do GNOME Shell e é validada à mão.
+Os testes sobem um barramento D-Bus isolado, registram um
+`StatusNotifierItem` falso e cobrem o backend sem interferir na sessão real.
+A parte visual roda dentro do GNOME Shell e ainda exige smoke test manual.
 
-### Identidade persistida
+## Licença
 
-A ordem é salva por uma chave estável derivada do campo `Id` do
-`StatusNotifierItem` (`bitwarden`, `dropbox-client`, `chrome_status_icon_1`),
-com fallback para `Title` e para o object path. O nome D-Bus efêmero
-(`:1.102`) nunca entra na chave, então a organização sobrevive a reinícios do
-app e da sessão.
-
-## Notas de licença
-
-Escrito do zero, mas a arquitetura segue o mesmo desenho de projetos GPL
-conhecidos do ecossistema (Status Tray, AppIndicator/KStatusNotifierItem
-Support). O projeto é distribuído sob **GPL-3.0-or-later** para permanecer
-compatível caso trechos desses projetos venham a ser incorporados; nesse caso,
-preserve as atribuições e os cabeçalhos de licença originais.
+GPL-3.0-or-later.

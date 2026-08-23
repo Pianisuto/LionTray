@@ -10,7 +10,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC="${ROOT}/liontray@lionflow.dev/lib"
+SRC="${ROOT}/liontray@pianisuto.dev/lib"
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
 

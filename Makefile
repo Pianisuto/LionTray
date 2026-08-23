@@ -1,4 +1,4 @@
-UUID    := liontray@lionflow.dev
+UUID    := liontray@pianisuto.dev
 SRC     := $(UUID)
 DEST    := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 
@@ -42,7 +42,10 @@ logs:
 	journalctl -f -o cat /usr/bin/gnome-shell
 
 pack: schemas
-	cd $(SRC) && zip -r ../$(UUID).zip . -x '*.zip'
+	rm -f $(UUID).zip
+	cd $(SRC) && zip -r ../$(UUID).zip . \
+		-x '*.zip' \
+		-x 'schemas/gschemas.compiled'
 
 check: schemas
 	@tmp=$$(mktemp -d); \

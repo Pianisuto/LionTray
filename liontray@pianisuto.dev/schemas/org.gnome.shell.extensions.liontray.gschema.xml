@@ -10,6 +10,12 @@
       <description>Tamanho, em pixels, dos ícones dos indicadores no painel. Um pouco acima dos 16px do painel do GNOME porque muitos apps entregam o ícone via IconPixmap com margem transparente embutida.</description>
     </key>
 
+    <key name="desaturate-icons" type="b">
+      <default>false</default>
+      <summary>Dessaturar os ícones</summary>
+      <description>Exibe os ícones dos aplicativos em tons de cinza, preservando transparência e forma.</description>
+    </key>
+
     <key name="hide-overflow-when-empty" type="b">
       <default>true</default>
       <summary>Ocultar o botão de overflow quando vazio</summary>

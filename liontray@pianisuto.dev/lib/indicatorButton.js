@@ -62,6 +62,15 @@ class LionTrayIndicatorButton extends St.Button {
         });
         this.set_child(this._icon);
 
+        // Dessaturacao acontece no ator, nao nos bytes da imagem. Assim a
+        // mesma opcao cobre IconName, SVG, PNG, IconPixmap e icones symbolic
+        // sem criar um segundo pipeline de resolucao/cache.
+        this._desaturateEffect = new Clutter.DesaturateEffect({factor: 1.0});
+        this._icon.add_effect_with_name('liontray-desaturate', this._desaturateEffect);
+        this._desaturateSettingsId = this._tray._settings.connect(
+            'changed::desaturate-icons', () => this._syncDesaturation());
+        this._syncDesaturation();
+
         this.connect('clicked', (_a, button) => this._onClicked(button));
         this.connect('scroll-event', (_a, event) => this._onScroll(event));
         this.connect('key-press-event', (_a, event) => this._onKeyPress(event));
@@ -105,6 +114,11 @@ class LionTrayIndicatorButton extends St.Button {
         this._toggleClass('liontray-attention', this.sni.status === 'NeedsAttention');
 
         this._syncStatus();
+    }
+
+    _syncDesaturation() {
+        this._desaturateEffect?.set_enabled(
+            this._tray._settings.get_boolean('desaturate-icons'));
     }
 
     /**
@@ -307,14 +321,20 @@ class LionTrayIndicatorButton extends St.Button {
         // a origem ou sob o ponteiro, e o valor so bate se o padding for o
         // mesmo. Com o pivo no centro, a escala cresce sem tirar o clone de
         // cima do icone original.
+        const dragIcon = new St.Icon({
+            style_class: 'liontray-icon',
+            gicon: this._icon.gicon,
+            fallback_icon_name: IconResolver.GENERIC_ICON,
+            icon_size: this._tray.iconSize,
+        });
+        if (this._tray._settings.get_boolean('desaturate-icons')) {
+            dragIcon.add_effect_with_name('liontray-desaturate',
+                new Clutter.DesaturateEffect({factor: 1.0}));
+        }
+
         const actor = new St.Bin({
             style_class: 'liontray-item liontray-drag-actor',
-            child: new St.Icon({
-                style_class: 'liontray-icon',
-                gicon: this._icon.gicon,
-                fallback_icon_name: IconResolver.GENERIC_ICON,
-                icon_size: this._tray.iconSize,
-            }),
+            child: dragIcon,
         });
         actor.set_pivot_point(0.5, 0.5);
         actor.set_scale(DRAG_ACTOR_SCALE, DRAG_ACTOR_SCALE);
@@ -411,6 +431,11 @@ class LionTrayIndicatorButton extends St.Button {
         this._destroyed = true;
 
         this._icon?.remove_all_transitions();
+
+        if (this._desaturateSettingsId) {
+            this._tray._settings.disconnect(this._desaturateSettingsId);
+            this._desaturateSettingsId = 0;
+        }
 
         if (this._draggable) {
             this._draggable.disconnect(this._dragBeginId);

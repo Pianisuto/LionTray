@@ -52,6 +52,14 @@ export default class LionTrayPreferences extends ExtensionPreferences {
         group.add(sizeRow);
         settings.bind('icon-size', sizeRow, 'value', Gio.SettingsBindFlags.DEFAULT);
 
+        const desaturateRow = new Adw.SwitchRow({
+            title: 'Dessaturar os ícones',
+            subtitle: 'Exibe os ícones dos aplicativos em tons de cinza',
+        });
+        group.add(desaturateRow);
+        settings.bind('desaturate-icons', desaturateRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+
         const boxRow = new Adw.ComboRow({
             title: 'Área do painel',
             subtitle: 'Em qual das três caixas do painel a bandeja vive',
@@ -189,7 +197,7 @@ export default class LionTrayPreferences extends ExtensionPreferences {
 
         group.add(new Adw.ActionRow({
             title: 'Versão',
-            subtitle: String(this.metadata.version ?? '?'),
+            subtitle: String(this.metadata.version ?? 'desenvolvimento'),
         }));
 
         group.add(new Adw.ActionRow({
