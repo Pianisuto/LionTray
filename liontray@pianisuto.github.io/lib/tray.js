@@ -27,6 +27,7 @@ import {IndicatorButton} from './indicatorButton.js';
 import {ThemeVariant} from './theming.js';
 import {Tooltip} from './tooltip.js';
 import {StatusNotifierItem} from './statusNotifierItem.js';
+import {OverflowWindow} from './overflowWindow.js';
 import {makeStableKey, warn} from './util.js';
 
 const MAX_REMEMBERED_KEYS = 200;
@@ -65,37 +66,6 @@ const PANEL_BOXES = {
 class TrayMenuManager extends PopupMenu.PopupMenuManager {
     _changeMenu() {
     }
-
-    /**
-     * Abre um menu sem tomar o grab modal.
-     *
-     * Existe por causa do overflow que se abre sozinho durante um arraste.
-     * O caminho normal (_onMenuOpenState) faz Main.pushModal(menu.actor), o
-     * que tiraria o grab do dnd.js e mataria o arraste no meio. Sem grab o
-     * popup nao consegue se fechar sozinho, entao quem chama fica
-     * responsavel por fecha-lo - a bandeja faz isso no fim do arraste.
-     */
-    openWithoutGrab(menu) {
-        if (menu.isOpen)
-            return;
-        this._openingWithoutGrab = true;
-        try {
-            // sem animacao: no meio de um arraste o popup costuma estar
-            // reabrindo logo depois de um close, e o cruzamento das duas
-            // animacoes pisca
-            menu.open(BoxPointer.PopupAnimation.NONE);
-        } finally {
-            this._openingWithoutGrab = false;
-        }
-    }
-
-    _onMenuOpenState(menu, open) {
-        // na abertura sem grab o menu nunca vira activeMenu, entao o
-        // fechamento correspondente tambem cai fora daqui sozinho
-        if (open && this._openingWithoutGrab)
-            return;
-        super._onMenuOpenState(menu, open);
-    }
 }
 
 export class LionTray {
@@ -113,6 +83,7 @@ export class LionTray {
         this._pending = new Set();   // "busName+path" em carregamento
         this._draggingKey = null;
         this._dragActive = false;
+        this._keepOverflowOpenAfterDrag = false;
         this._writingSettings = false;
         this._syncLaterId = 0;
         this._peekId = 0;
@@ -175,7 +146,7 @@ export class LionTray {
 
         this._placeInPanel();
 
-        this._buildOverflowMenu();
+        this._buildOverflowWindow();
         this._buildOverflowContextMenu();
         this._updateIconSize();
         this._sync();
@@ -217,15 +188,21 @@ export class LionTray {
             // o ponteiro nao se move ao clicar, entao a dica ja agendada
             // ainda apareceria - por cima do popup que esta abrindo
             this.tooltip?.hide();
-            if (event.get_button() === Clutter.BUTTON_SECONDARY)
+            if (event.get_button() === Clutter.BUTTON_SECONDARY) {
+                this._overflowWindow.close();
                 this._overflowContextMenu.toggle();
-            else
-                this._overflowMenu.toggle();
+            } else {
+                this._overflowContextMenu.close();
+                this._overflowWindow.toggle();
+            }
             return Clutter.EVENT_STOP;
         });
         // o caminho acima consome o clique do mouse; `clicked` so sobra
         // para Enter/espaco, que e como o teclado chega aqui
-        this._overflowButton.connect('clicked', () => this._overflowMenu.toggle());
+        this._overflowButton.connect('clicked', () => {
+            this._overflowContextMenu.close();
+            this._overflowWindow.toggle();
+        });
         this._overflowButton.connect('notify::hover', () => {
             if (this._overflowButton.hover && !this._dragActive)
                 this.tooltip?.scheduleFor(this._overflowButton, this._overflowTooltip());
@@ -243,10 +220,10 @@ export class LionTray {
             : `${count} indicadores ocultos`;
     }
 
-    _buildOverflowMenu() {
-        this._overflowMenu = new PopupMenu.PopupMenu(this._overflowButton, 0.5, St.Side.TOP);
-        this._overflowMenu.actor.add_style_class_name('liontray-overflow-menu');
-        this.theme.track(this._overflowMenu.actor);
+    _buildOverflowWindow() {
+        this._overflowWindow = new OverflowWindow(this._overflowButton);
+        this._overflowWindow.actor.add_style_class_name('liontray-overflow-menu');
+        this.theme.track(this._overflowWindow.actor);
 
         this._overflowItem = new PopupMenu.PopupBaseMenuItem({
             reactive: false,
@@ -274,11 +251,7 @@ export class LionTray {
         this._overflowBox.add_child(this._emptyLabel);
 
         this._overflowItem.add_child(this._overflowBox);
-        this._overflowMenu.addMenuItem(this._overflowItem);
-
-        Main.layoutManager.uiGroup.add_child(this._overflowMenu.actor);
-        this._overflowMenu.actor.hide();
-        this.menuManager.addMenu(this._overflowMenu);
+        this._overflowWindow.add_child(this._overflowItem);
     }
 
     /**
@@ -337,7 +310,7 @@ export class LionTray {
     }
 
     closeOverflow() {
-        this._overflowMenu?.close();
+        this._overflowWindow?.close();
         this._overflowContextMenu?.close();
     }
 
@@ -349,10 +322,8 @@ export class LionTray {
      * Fecha o overflow, os menus dos indicadores e o menu do painel que
      * porventura esteja aberto.
      *
-     * Um menu aberto detem o grab modal, e isso atrapalha o arraste de
-     * duas formas: o ponteiro nao chega nos botoes da bandeja e o
-     * PopupMenuManager reage aos ENTER que passam por ele. Comecar um
-     * arraste com a bandeja limpa evita as duas.
+     * Comecar um arraste com a bandeja limpa evita que menus de indicadores
+     * ou o menu de contexto concorram com os alvos de drop.
      */
     closeAllMenus() {
         this.closeOverflow();
@@ -623,19 +594,20 @@ export class LionTray {
     onDragBegin(button) {
         this._draggingKey = button.key;
         this._dragActive = true;
+        this._keepOverflowOpenAfterDrag = false;
         this.tooltip?.hide();
         // o botao de overflow precisa existir para receber o drop mesmo
         // quando nenhum indicador esta oculto
         this._overflowButton.visible = true;
 
-        // Pegar um item que vive no overflow: o popup precisa continuar
-        // aberto, senao nao ha onde reordenar la dentro. O grab modal e
-        // que atrapalha o arraste, nao o popup em si - entao fecha (que e
-        // o que solta o grab) e reabre sem ele.
+        // Pegar um item que vive no overflow: a janela precisa continuar
+        // aberta, senao nao ha onde reordenar la dentro.
         const fromOverflow = button.get_parent() === this._overflowBox;
+        if (fromOverflow)
+            this._overflowWindow.setDismissalSuspended(true);
         this.closeAllMenus();
         if (fromOverflow)
-            this.menuManager.openWithoutGrab(this._overflowMenu);
+            this._overflowWindow.open(BoxPointer.PopupAnimation.NONE);
     }
 
     onDragEnd() {
@@ -644,9 +616,13 @@ export class LionTray {
         this._cancelOverflowPeek();
         this._removeIndicator();
         this._clearDropTarget();
-        // o overflow aberto durante o arraste nao tem grab, entao nao sabe
-        // se fechar sozinho
-        this.closeOverflow();
+        if (this._keepOverflowOpenAfterDrag)
+            this._overflowWindow.resumeDismissalAfterDrag();
+        else {
+            this._overflowWindow.setDismissalSuspended(false);
+            this.closeOverflow();
+        }
+        this._keepOverflowOpenAfterDrag = false;
         this._syncLater();
     }
 
@@ -760,13 +736,15 @@ export class LionTray {
      * indicador ja oculto exigiria soltar, clicar e arrastar de novo.
      */
     _scheduleOverflowPeek() {
-        if (this._peekId || this._overflowMenu.isOpen)
+        if (this._peekId || this._overflowWindow.isOpen)
             return;
         this._peekId = GLib.timeout_add(
             GLib.PRIORITY_DEFAULT, OVERFLOW_PEEK_MS, () => {
                 this._peekId = 0;
-                if (this._dragActive && !this._destroyed)
-                    this.menuManager.openWithoutGrab(this._overflowMenu);
+                if (this._dragActive && !this._destroyed) {
+                    this._overflowWindow.setDismissalSuspended(true);
+                    this._overflowWindow.open(BoxPointer.PopupAnimation.NONE);
+                }
                 return GLib.SOURCE_REMOVE;
             });
     }
@@ -781,6 +759,7 @@ export class LionTray {
     _onDropInTray(source, x) {
         if (!source?.isLionTrayItem)
             return false;
+        this._keepOverflowOpenAfterDrag = false;
         const index = this._indexForX(this._trayBox, x);
         this._removeIndicator();
         this._clearDropTarget();
@@ -791,6 +770,7 @@ export class LionTray {
     _onDropInOverflow(source, index) {
         if (!source?.isLionTrayItem)
             return false;
+        this._keepOverflowOpenAfterDrag = true;
         this._removeIndicator();
         this._clearDropTarget();
         this._place(source.key, index, true);
@@ -1038,13 +1018,15 @@ export class LionTray {
         this.tooltip.destroy();
         this.tooltip = null;
 
-        for (const menu of [this._overflowMenu, this._overflowContextMenu]) {
+        this._overflowWindow?.destroy();
+        this._overflowWindow = null;
+
+        for (const menu of [this._overflowContextMenu]) {
             if (!menu)
                 continue;
             this.menuManager.removeMenu(menu);
             menu.destroy();
         }
-        this._overflowMenu = null;
         this._overflowContextMenu = null;
 
         // o handler de destroy do botao cuida do menu de conflito
