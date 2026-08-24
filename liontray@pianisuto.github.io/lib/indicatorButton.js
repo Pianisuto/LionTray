@@ -203,14 +203,9 @@ class LionTrayIndicatorButton extends St.Button {
         // popup tira o ator da tela.
         const [x, y] = this._pointerPosition();
 
-        // Fechar o overflow ANTES de falar com o aplicativo.
-        //
-        // Um popup aberto detem o grab modal do Shell (Main.pushModal), e
-        // um grab modal impede outro cliente de pegar o ponteiro e o
-        // teclado. Aplicativos que capturam a tela ao serem ativados - o
-        // Flameshot e o caso obvio - simplesmente nao funcionam enquanto
-        // ele estiver de pe. Fechar solta o grab de forma sincrona, entao
-        // quando o Activate sai pelo barramento o caminho ja esta livre.
+        // Fechar o overflow ANTES de falar com o aplicativo. Alem de manter
+        // a bandeja consistente, isso evita que o ator do item desapareca
+        // enquanto o aplicativo usa a posicao recebida abaixo.
         this._tray.closeOverflow();
 
         if (button === Clutter.BUTTON_SECONDARY) {
