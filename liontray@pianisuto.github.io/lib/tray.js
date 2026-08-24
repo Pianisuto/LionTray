@@ -603,11 +603,11 @@ export class LionTray {
         // Pegar um item que vive no overflow: a janela precisa continuar
         // aberta, senao nao ha onde reordenar la dentro.
         const fromOverflow = button.get_parent() === this._overflowBox;
-        if (fromOverflow)
-            this._overflowWindow.setDismissalSuspended(true);
         this.closeAllMenus();
-        if (fromOverflow)
+        if (fromOverflow) {
+            this._overflowWindow.setDismissalSuspended(true);
             this._overflowWindow.open(BoxPointer.PopupAnimation.NONE);
+        }
     }
 
     onDragEnd() {

@@ -125,6 +125,7 @@ export class OverflowWindow {
     close(animate = BoxPointer.PopupAnimation.FULL) {
         this._disconnectOpenListeners();
         this._cancelResumeDismissal();
+        this._dismissalSuspended = false;
 
         if (!this._isOpen && !this.actor.visible)
             return;
