@@ -1021,13 +1021,12 @@ export class LionTray {
         this._overflowWindow?.destroy();
         this._overflowWindow = null;
 
-        for (const menu of [this._overflowContextMenu]) {
-            if (!menu)
-                continue;
-            this.menuManager.removeMenu(menu);
-            menu.destroy();
-        }
+        const contextMenu = this._overflowContextMenu;
         this._overflowContextMenu = null;
+        if (contextMenu) {
+            this.menuManager.removeMenu(contextMenu);
+            contextMenu.destroy();
+        }
 
         // o handler de destroy do botao cuida do menu de conflito
         this._conflictButton?.destroy();

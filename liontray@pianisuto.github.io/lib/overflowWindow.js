@@ -21,6 +21,11 @@ export class OverflowWindow {
         this._dismissalSuspended = false;
         this._resumeDismissalId = 0;
         this._focusWindow = null;
+        this._stageCapturedEventId = 0;
+        this._stageKeyFocusId = 0;
+        this._focusWindowId = 0;
+        this._systemModalOpenedId = 0;
+        this._monitorsChangedId = 0;
 
         this.actor = new BoxPointer.BoxPointer(St.Side.TOP);
         this.actor.style_class = 'popup-menu-boxpointer';
@@ -44,14 +49,6 @@ export class OverflowWindow {
 
         this._actorCapturedEventId = this.actor.connect(
             'captured-event', (_actor, event) => this._onActorEvent(event));
-        this._stageCapturedEventId = global.stage.connect(
-            'captured-event', (_stage, event) => this._onStageEvent(event));
-        this._stageKeyFocusId = global.stage.connect(
-            'notify::key-focus', () => this._onKeyFocusChanged());
-        this._focusWindowId = global.display.connect(
-            'notify::focus-window', () => this._onFocusWindowChanged());
-        this._systemModalOpenedId = Main.layoutManager.connect(
-            'system-modal-opened', () => this.close(BoxPointer.PopupAnimation.NONE));
         this._sourceMappedId = sourceActor.connect(
             'notify::mapped', () => {
                 if (!sourceActor.mapped)
@@ -112,6 +109,7 @@ export class OverflowWindow {
         if (this._destroyed || this._isOpen)
             return;
 
+        this._connectOpenListeners();
         this._focusWindow = global.display.focus_window;
         this._isOpen = true;
         this.actor.setPosition(this._sourceActor, 0.5);
@@ -121,17 +119,66 @@ export class OverflowWindow {
         // A abertura por teclado deixa o foco dentro do overflow, como um
         // menu comum, mas isso continua sendo apenas foco do Shell, nao um
         // grab exclusivo.
-        if (global.stage.get_key_focus() === this._sourceActor)
-            this.actor.grab_key_focus();
+        this.actor.grab_key_focus();
     }
 
     close(animate = BoxPointer.PopupAnimation.FULL) {
+        this._disconnectOpenListeners();
+        this._cancelResumeDismissal();
+
         if (!this._isOpen && !this.actor.visible)
             return;
 
         this._isOpen = false;
         this._focusWindow = null;
         this.actor.close(animate);
+    }
+
+    _cancelResumeDismissal() {
+        if (!this._resumeDismissalId)
+            return;
+
+        GLib.source_remove(this._resumeDismissalId);
+        this._resumeDismissalId = 0;
+    }
+
+    _connectOpenListeners() {
+        if (this._stageCapturedEventId)
+            return;
+
+        this._stageCapturedEventId = global.stage.connect(
+            'captured-event', (_stage, event) => this._onStageEvent(event));
+        this._stageKeyFocusId = global.stage.connect(
+            'notify::key-focus', () => this._onKeyFocusChanged());
+        this._focusWindowId = global.display.connect(
+            'notify::focus-window', () => this._onFocusWindowChanged());
+        this._systemModalOpenedId = Main.layoutManager.connect(
+            'system-modal-opened', () => this.close(BoxPointer.PopupAnimation.NONE));
+        this._monitorsChangedId = Main.layoutManager.connect(
+            'monitors-changed', () => this._onMonitorsChanged());
+    }
+
+    _disconnectOpenListeners() {
+        if (this._stageCapturedEventId) {
+            global.stage.disconnect(this._stageCapturedEventId);
+            this._stageCapturedEventId = 0;
+        }
+        if (this._stageKeyFocusId) {
+            global.stage.disconnect(this._stageKeyFocusId);
+            this._stageKeyFocusId = 0;
+        }
+        if (this._focusWindowId) {
+            global.display.disconnect(this._focusWindowId);
+            this._focusWindowId = 0;
+        }
+        if (this._systemModalOpenedId) {
+            Main.layoutManager.disconnect(this._systemModalOpenedId);
+            this._systemModalOpenedId = 0;
+        }
+        if (this._monitorsChangedId) {
+            Main.layoutManager.disconnect(this._monitorsChangedId);
+            this._monitorsChangedId = 0;
+        }
     }
 
     _contains(root, actor) {
@@ -162,10 +209,19 @@ export class OverflowWindow {
     }
 
     _onStageEvent(event) {
-        if (!this._isOpen || this._dismissalSuspended)
+        if (!this._isOpen)
             return Clutter.EVENT_PROPAGATE;
 
         const type = event.type();
+        if (type === Clutter.EventType.KEY_PRESS &&
+            event.get_key_symbol() === Clutter.KEY_Escape) {
+            this.close();
+            return Clutter.EVENT_STOP;
+        }
+
+        if (this._dismissalSuspended)
+            return Clutter.EVENT_PROPAGATE;
+
         if (type !== Clutter.EventType.BUTTON_PRESS &&
             type !== Clutter.EventType.TOUCH_BEGIN)
             return Clutter.EVENT_PROPAGATE;
@@ -200,23 +256,24 @@ export class OverflowWindow {
             this.close(BoxPointer.PopupAnimation.FADE);
     }
 
+    _onMonitorsChanged() {
+        if (!this._isOpen)
+            return;
+
+        this.actor.setPosition(this._sourceActor, 0.5);
+        this.actor.queue_relayout();
+    }
+
     destroy() {
         if (this._destroyed)
             return;
         this._destroyed = true;
         this._isOpen = false;
 
-        if (this._resumeDismissalId) {
-            GLib.source_remove(this._resumeDismissalId);
-            this._resumeDismissalId = 0;
-        }
-
+        this._cancelResumeDismissal();
+        this._disconnectOpenListeners();
         this._sourceActor.disconnect(this._sourceMappedId);
         this._sourceActor.disconnect(this._sourceDestroyId);
-        global.stage.disconnect(this._stageCapturedEventId);
-        global.stage.disconnect(this._stageKeyFocusId);
-        global.display.disconnect(this._focusWindowId);
-        Main.layoutManager.disconnect(this._systemModalOpenedId);
         this.actor.disconnect(this._actorCapturedEventId);
         global.focus_manager.remove_group(this.actor);
 
