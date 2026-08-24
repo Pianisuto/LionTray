@@ -264,7 +264,16 @@ export class StatusNotifierWatcher extends EventEmitter {
 
             let command = '';
             try {
-                const [, bytes] = GLib.file_get_contents(`/proc/${pid}/comm`);
+                const file = Gio.File.new_for_path(`/proc/${pid}/comm`);
+                const [, bytes] = await new Promise((resolve, reject) => {
+                    file.load_contents_async(this._cancellable, (source, result) => {
+                        try {
+                            resolve(source.load_contents_finish(result));
+                        } catch (e) {
+                            reject(e);
+                        }
+                    });
+                });
                 command = new TextDecoder().decode(bytes).trim();
             } catch {
                 // processo pode ter saido nesse meio tempo
